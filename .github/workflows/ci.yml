@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [main]
 
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -34,3 +36,15 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Create Release Pull Request or Publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: changesets/action@v1
+        with:
+          publish: pnpm release
+          version: pnpm version
+          title: "chore: release package"
+          commit: "chore: release package"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
