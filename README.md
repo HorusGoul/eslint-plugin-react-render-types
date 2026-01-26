@@ -367,6 +367,33 @@ interface Props {
 <Menu item={<Button />} />  // Error: Expected MenuItem, got Button
 ```
 
+### `react-render-types/valid-renders-jsdoc`
+
+Validates `@renders` JSDoc annotation syntax. Catches common mistakes like missing braces or incorrect component name casing.
+
+**Error Examples:**
+
+```tsx
+/** @renders Header */  // Error: Missing braces. Use: @renders {Header}
+function MyHeader() {
+  return <Header />;
+}
+```
+
+```tsx
+/** @renders {header} */  // Error: Component name should be PascalCase
+function MyHeader() {
+  return <Header />;
+}
+```
+
+```tsx
+/** @renders {} */  // Error: Provide a component name
+function MyHeader() {
+  return <Header />;
+}
+```
+
 ## Comparison with Flow Render Types
 
 | Feature | Flow | This Plugin |

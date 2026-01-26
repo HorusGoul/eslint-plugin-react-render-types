@@ -21,6 +21,7 @@ Object.assign(plugin.configs, {
     rules: {
       "react-render-types/valid-render-return": "error",
       "react-render-types/valid-render-prop": "error",
+      "react-render-types/valid-renders-jsdoc": "warn",
     } satisfies Record<`react-render-types/${RuleKey}`, TSESLint.Linter.RuleLevel>,
   },
 });
