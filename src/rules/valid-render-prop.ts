@@ -243,11 +243,20 @@ export default createRule<[], MessageIds>({
         return;
       }
 
-      // Try to find annotation for children prop
+      // Try to find annotation for this component's children prop
+      // Look for "{ElementName}Props.children" or "{ElementName}.children"
       let annotation: RendersAnnotation | null = null;
 
-      for (const [key, ann] of propAnnotations) {
-        if (key.endsWith(".children")) {
+      // Check common naming conventions for props interfaces
+      const possibleInterfaceNames = [
+        `${elementName}Props.children`,
+        `${elementName}.children`,
+        `I${elementName}Props.children`,
+      ];
+
+      for (const interfaceKey of possibleInterfaceNames) {
+        const ann = propAnnotations.get(interfaceKey);
+        if (ann) {
           annotation = ann;
           break;
         }
