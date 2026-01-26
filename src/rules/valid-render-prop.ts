@@ -1,8 +1,10 @@
 import type { TSESTree } from "@typescript-eslint/utils";
+import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
 import { getJSXElementName, isComponentName } from "../utils/component-utils.js";
 import { canRenderComponent } from "../utils/render-chain.js";
+import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import type { RendersAnnotation } from "../types/index.js";
 
 type MessageIds = "invalidRenderProp" | "invalidRenderChildren";
@@ -34,11 +36,29 @@ export default createRule<[], MessageIds>({
     const sourceCode = context.sourceCode;
 
     // Build a map of component names to their @renders annotations
-    const renderMap: RenderMap = new Map();
+    const localRenderMap: RenderMap = new Map();
 
     // Store prop annotations from interfaces/types
     // Map of "ComponentName.propName" -> RendersAnnotation
     const propAnnotations = new Map<string, RendersAnnotation>();
+
+    // Try to get typed parser services for cross-file resolution
+    let crossFileResolver: ReturnType<typeof createCrossFileResolver> | null = null;
+    try {
+      const parserServices = ESLintUtils.getParserServices(context, true);
+      if (parserServices.program) {
+        crossFileResolver = createCrossFileResolver({
+          parserServices,
+          sourceCode,
+          filename: context.filename,
+        });
+      }
+    } catch {
+      // Typed linting not enabled, cross-file resolution not available
+    }
+
+    // Queue JSX elements for validation in Program:exit
+    const jsxElementsToValidate: TSESTree.JSXElement[] = [];
 
     /**
      * Get the @renders annotation from a function node's leading comments
@@ -87,7 +107,8 @@ export default createRule<[], MessageIds>({
 
     function isValidValue(
       name: string,
-      annotation: RendersAnnotation
+      annotation: RendersAnnotation,
+      renderMap: RenderMap
     ): boolean {
       if (canRenderComponent(name, annotation.componentName, renderMap)) {
         return true;
@@ -143,7 +164,7 @@ export default createRule<[], MessageIds>({
 
       const componentName = getComponentName(node);
       if (componentName && isComponentName(componentName)) {
-        renderMap.set(componentName, annotation);
+        localRenderMap.set(componentName, annotation);
       }
     }
 
@@ -184,7 +205,8 @@ export default createRule<[], MessageIds>({
      */
     function validateJSXAttribute(
       attr: TSESTree.JSXAttribute,
-      jsxElement: TSESTree.JSXElement
+      jsxElement: TSESTree.JSXElement,
+      renderMap: RenderMap
     ): void {
       if (attr.name.type !== "JSXIdentifier" || !attr.value) {
         return;
@@ -221,7 +243,7 @@ export default createRule<[], MessageIds>({
         passedValue = getJSXElementName(attr.value);
       }
 
-      if (passedValue && !isValidValue(passedValue, annotation)) {
+      if (passedValue && !isValidValue(passedValue, annotation, renderMap)) {
         context.report({
           node: attr.value,
           messageId: "invalidRenderProp",
@@ -237,7 +259,10 @@ export default createRule<[], MessageIds>({
     /**
      * Validate JSX children against @renders annotation
      */
-    function validateJSXChildren(node: TSESTree.JSXElement): void {
+    function validateJSXChildren(
+      node: TSESTree.JSXElement,
+      renderMap: RenderMap
+    ): void {
       const elementName = getJSXElementName(node);
       if (!elementName) {
         return;
@@ -270,7 +295,7 @@ export default createRule<[], MessageIds>({
       for (const child of node.children) {
         if (child.type === "JSXElement") {
           const childName = getJSXElementName(child);
-          if (childName && !isValidValue(childName, annotation)) {
+          if (childName && !isValidValue(childName, annotation, renderMap)) {
             context.report({
               node: child,
               messageId: "invalidRenderChildren",
@@ -282,7 +307,7 @@ export default createRule<[], MessageIds>({
           }
         } else if (child.type === "JSXExpressionContainer") {
           const childName = getJSXNameFromExpression(child.expression);
-          if (childName && !isValidValue(childName, annotation)) {
+          if (childName && !isValidValue(childName, annotation, renderMap)) {
             context.report({
               node: child,
               messageId: "invalidRenderChildren",
@@ -296,6 +321,34 @@ export default createRule<[], MessageIds>({
       }
     }
 
+    /**
+     * Validate all queued JSX elements
+     */
+    function validateAllJSXElements(): void {
+      // Build the effective render map:
+      // - If cross-file resolution is available, augment local map with imported components
+      // - Otherwise, use only local definitions
+      let effectiveRenderMap: RenderMap;
+
+      if (crossFileResolver) {
+        effectiveRenderMap = crossFileResolver.buildAugmentedRenderMap(localRenderMap);
+      } else {
+        effectiveRenderMap = localRenderMap;
+      }
+
+      for (const node of jsxElementsToValidate) {
+        // Validate attributes
+        for (const attr of node.openingElement.attributes) {
+          if (attr.type === "JSXAttribute") {
+            validateJSXAttribute(attr, node, effectiveRenderMap);
+          }
+        }
+
+        // Validate children
+        validateJSXChildren(node, effectiveRenderMap);
+      }
+    }
+
     return {
       // Collect component @renders annotations
       FunctionDeclaration: collectComponentAnnotation,
@@ -305,18 +358,13 @@ export default createRule<[], MessageIds>({
       // Collect prop annotations from interfaces
       TSInterfaceDeclaration: processInterface,
 
-      // Validate JSX elements
+      // Queue JSX elements for validation
       JSXElement(node) {
-        // Validate attributes
-        for (const attr of node.openingElement.attributes) {
-          if (attr.type === "JSXAttribute") {
-            validateJSXAttribute(attr, node);
-          }
-        }
-
-        // Validate children
-        validateJSXChildren(node);
+        jsxElementsToValidate.push(node);
       },
+
+      // Validate all JSX elements once we've collected all annotations
+      "Program:exit": validateAllJSXElements,
     };
   },
 });

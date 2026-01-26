@@ -1,8 +1,10 @@
 import type { TSESTree } from "@typescript-eslint/utils";
+import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
 import { getJSXElementName, isComponentName } from "../utils/component-utils.js";
 import { canRenderComponent } from "../utils/render-chain.js";
+import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import type { RendersAnnotation } from "../types/index.js";
 
 type MessageIds = "invalidRenderReturn";
@@ -33,7 +35,7 @@ export default createRule<[], MessageIds>({
 
     // Build a map of component names to their @renders annotations
     // This enables chained rendering validation
-    const renderMap: RenderMap = new Map();
+    const localRenderMap: RenderMap = new Map();
 
     // Store functions to validate after we've built the render map
     const functionsToValidate: Array<{
@@ -41,6 +43,21 @@ export default createRule<[], MessageIds>({
       annotation: RendersAnnotation;
       componentName: string;
     }> = [];
+
+    // Try to get typed parser services for cross-file resolution
+    let crossFileResolver: ReturnType<typeof createCrossFileResolver> | null = null;
+    try {
+      const parserServices = ESLintUtils.getParserServices(context, true);
+      if (parserServices.program) {
+        crossFileResolver = createCrossFileResolver({
+          parserServices,
+          sourceCode,
+          filename: context.filename,
+        });
+      }
+    } catch {
+      // Typed linting not enabled, cross-file resolution not available
+    }
 
     /**
      * Get component name from a function node
@@ -176,8 +193,8 @@ export default createRule<[], MessageIds>({
 
       const componentName = getComponentName(node);
       if (componentName && isComponentName(componentName)) {
-        // Add to render map for chain resolution
-        renderMap.set(componentName, annotation);
+        // Add to local render map for chain resolution
+        localRenderMap.set(componentName, annotation);
 
         // Queue for validation
         functionsToValidate.push({ node, annotation, componentName });
@@ -197,7 +214,8 @@ export default createRule<[], MessageIds>({
      */
     function isValidReturn(
       name: string,
-      annotation: RendersAnnotation
+      annotation: RendersAnnotation,
+      renderMap: RenderMap
     ): boolean {
       // Direct match or through render chain
       if (canRenderComponent(name, annotation.componentName, renderMap)) {
@@ -225,6 +243,17 @@ export default createRule<[], MessageIds>({
      * Second pass: validate return statements using render chain
      */
     function validateFunctions(): void {
+      // Build the effective render map:
+      // - If cross-file resolution is available, augment local map with imported components
+      // - Otherwise, use only local definitions
+      let effectiveRenderMap: RenderMap;
+
+      if (crossFileResolver) {
+        effectiveRenderMap = crossFileResolver.buildAugmentedRenderMap(localRenderMap);
+      } else {
+        effectiveRenderMap = localRenderMap;
+      }
+
       for (const { node, annotation } of functionsToValidate) {
         // Collect all return statements/expressions
         const returnedNames: Array<{ name: string; node: TSESTree.Node }> = [];
@@ -252,7 +281,7 @@ export default createRule<[], MessageIds>({
 
         // Validate each return
         for (const { name, node: returnNode } of returnedNames) {
-          if (!isValidReturn(name, annotation)) {
+          if (!isValidReturn(name, annotation, effectiveRenderMap)) {
             context.report({
               node: returnNode,
               messageId: "invalidRenderReturn",

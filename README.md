@@ -36,6 +36,17 @@ This plugin requires:
 
 ## Configuration
 
+### ⚠️ Important: Typed Linting Required
+
+**This plugin requires typed linting to be configured.** Without it, the plugin cannot resolve render chains or validate component relationships properly.
+
+Typed linting connects ESLint to your TypeScript compiler, giving the plugin access to type information. This is what enables features like:
+- Resolving which component a `@renders` annotation refers to
+- Following render chains across component boundaries
+- Validating that props receive correctly-typed components
+
+If you see unexpected behavior or missing errors, ensure typed linting is properly configured.
+
 ### Flat Config (ESLint 9+)
 
 ```javascript
@@ -49,21 +60,66 @@ export default [
   {
     languageOptions: {
       parserOptions: {
+        // REQUIRED: Enable typed linting
         projectService: true,
+        // Or use the legacy project option:
+        // project: './tsconfig.json',
       },
     },
   },
 ];
 ```
 
+### Setting Up Typed Linting
+
+There are two ways to enable typed linting:
+
+#### Option 1: `projectService` (Recommended for ESLint 9+)
+
+```javascript
+{
+  languageOptions: {
+    parserOptions: {
+      projectService: true,
+    },
+  },
+}
+```
+
+This automatically infers the TypeScript configuration for each file.
+
+#### Option 2: Explicit `project` Path
+
+```javascript
+{
+  languageOptions: {
+    parserOptions: {
+      project: './tsconfig.json',
+      // For monorepos, you may need:
+      // project: ['./tsconfig.json', './packages/*/tsconfig.json'],
+    },
+  },
+}
+```
+
+For more details on typed linting setup, see the [typescript-eslint documentation](https://typescript-eslint.io/getting-started/typed-linting/).
+
 ### Manual Configuration
 
 ```javascript
 // eslint.config.js
 import reactRenderTypes from "eslint-plugin-react-render-types";
+import tsParser from "@typescript-eslint/parser";
 
 export default [
   {
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        projectService: true,  // REQUIRED for typed linting
+        ecmaFeatures: { jsx: true },
+      },
+    },
     plugins: {
       "react-render-types": reactRenderTypes,
     },
@@ -74,6 +130,16 @@ export default [
   },
 ];
 ```
+
+### Troubleshooting Typed Linting
+
+If you encounter issues:
+
+1. **"Parsing error: Cannot read file tsconfig.json"** - Ensure the `project` path is correct relative to where ESLint runs
+
+2. **"File is not part of a TypeScript project"** - Add the file to your `tsconfig.json`'s `include` array, or use `projectService: { allowDefaultProject: ['*.tsx'] }`
+
+3. **Performance issues** - Typed linting is slower than regular linting. Consider using `TIMING=1 eslint .` to identify bottlenecks. For large projects, see [typescript-eslint performance docs](https://typescript-eslint.io/troubleshooting/typed-linting/performance/)
 
 ## JSDoc Syntax
 
@@ -329,7 +395,28 @@ This enables incremental adoption - you can add `@renders` annotations gradually
 
 ## TypeScript Integration
 
-This plugin uses `@typescript-eslint/parser` to parse TypeScript and JSX. It works alongside your existing TypeScript configuration and other ESLint rules.
+This plugin uses `@typescript-eslint/parser` to parse TypeScript and JSX. **Typed linting must be enabled** for the plugin to work correctly - see the [Configuration](#configuration) section above.
+
+The plugin:
+- Requires `@typescript-eslint/parser` >= 8.0.0
+- Requires typed linting (`projectService: true` or `project: './tsconfig.json'`)
+- Works alongside your existing TypeScript configuration and other ESLint rules
+- Is compatible with `typescript-eslint`'s recommended configs
+
+### Why Typed Linting?
+
+Unlike simple syntax-based rules, this plugin needs to understand the relationships between components. When you write:
+
+```tsx
+/** @renders {Header} */
+function CustomHeader() {
+  return <MyHeader />;  // Is this valid?
+}
+```
+
+The plugin needs to know what `MyHeader` renders. This requires type information from TypeScript, which is only available with typed linting enabled.
+
+Without typed linting, the plugin will still run but may not catch all errors or may produce false positives.
 
 ## License
 
