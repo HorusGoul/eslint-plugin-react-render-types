@@ -74,16 +74,9 @@ Running `pnpm lint` shows errors from the `valid-render-return` rule in `Invalid
 | 5 | `ChainedWrong` | `@renders {CardHeader}` but returns component that renders `CardFooter` |
 | 6 | `ConditionalWrong` | One return path returns `CardFooter` (expects `CardHeader`) |
 
-### Prop Validation (same-file only)
+### Prop Validation
 
-The `valid-render-prop` rule validates props/children with `@renders` annotations, but **only when the interface is defined in the same file**. This is a current limitation.
-
-To see prop validation in action, check `test-single-file.tsx` which defines both the interface and usage in one file:
-
-```bash
-# This will show the prop validation error
-pnpm lint | grep test-single-file
-```
+The `valid-render-prop` rule validates props/children with `@renders` annotations. This works across files when typed linting is enabled (see main README for configuration).
 
 ## Key Patterns Demonstrated
 
@@ -126,10 +119,9 @@ function DismissibleHeader() {
 }
 ```
 
-### 5. Props with Render Types (same-file)
+### 5. Props with Render Types
 
 ```tsx
-// Interface must be in the same file as the JSX usage
 interface CardLayoutProps {
   /** @renders {CardHeader} */
   header: React.ReactNode;
@@ -143,10 +135,6 @@ interface CardLayoutProps {
 <CardLayout header={<div>...</div>} />  // Error!
 ```
 
-## Current Limitations
+## Requirements
 
-1. **Cross-file prop validation**: Prop/children annotations are only checked when the interface is defined in the same file as the JSX usage. This is because the ESLint rule doesn't have access to type information from imported modules.
-
-2. **Cross-file render chain resolution**: When a component returns another component defined in a different file, the chain cannot be verified. The rule allows unknown components (assumes valid) to enable incremental adoption.
-
-These limitations may be addressed in future versions using TypeScript's type checker for cross-file resolution.
+This plugin requires typed linting to be enabled. See the [main README](../README.md#configuration) for configuration instructions.

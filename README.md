@@ -367,14 +367,6 @@ interface Props {
 <Menu item={<Button />} />  // Error: Expected MenuItem, got Button
 ```
 
-## Cross-File Resolution
-
-When a component imports another component whose `@renders` annotation can't be resolved (e.g., from a third-party library), the plugin will:
-- Issue a **warning** (not an error)
-- Allow the code to pass
-
-This enables incremental adoption - you can add `@renders` annotations gradually without breaking your build.
-
 ## Comparison with Flow Render Types
 
 | Feature | Flow | This Plugin |
@@ -391,7 +383,7 @@ This enables incremental adoption - you can add `@renders` annotations gradually
 
 - **Function components only** - Class components are not currently supported
 - **JSDoc-based** - Requires explicit annotations (no inference)
-- **Same-file resolution** - Render chains are resolved within the same file; cross-file chains issue warnings
+- **Typed linting required** - See [Configuration](#configuration) for setup instructions
 
 ## TypeScript Integration
 
