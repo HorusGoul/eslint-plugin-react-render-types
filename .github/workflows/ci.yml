@@ -9,7 +9,7 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
     permissions:
       contents: write
