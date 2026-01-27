@@ -36,16 +36,14 @@ This plugin requires:
 
 ## Configuration
 
-### ⚠️ Important: Typed Linting Required
+### ⚠️ Typed Linting Required
 
-**This plugin requires typed linting to be configured.** Without it, the plugin cannot resolve render chains or validate component relationships properly.
+**This plugin requires typed linting.** Without it, the plugin will throw an error.
 
-Typed linting connects ESLint to your TypeScript compiler, giving the plugin access to type information. This is what enables features like:
-- Resolving which component a `@renders` annotation refers to
-- Following render chains across component boundaries
+Typed linting connects ESLint to your TypeScript compiler, giving the plugin access to type information. This is required for:
+- Resolving component type identity across files (components with the same name from different files are correctly distinguished)
+- Following render chains through `@renders` annotations
 - Validating that props receive correctly-typed components
-
-If you see unexpected behavior or missing errors, ensure typed linting is properly configured.
 
 ### Flat Config (ESLint 9+)
 
@@ -367,6 +365,33 @@ interface Props {
 <Menu item={<Button />} />  // Error: Expected MenuItem, got Button
 ```
 
+### `react-render-types/valid-renders-jsdoc`
+
+Validates `@renders` JSDoc annotation syntax. Catches common mistakes like missing braces or incorrect component name casing.
+
+**Error Examples:**
+
+```tsx
+/** @renders Header */  // Error: Missing braces. Use: @renders {Header}
+function MyHeader() {
+  return <Header />;
+}
+```
+
+```tsx
+/** @renders {header} */  // Error: Component name should be PascalCase
+function MyHeader() {
+  return <Header />;
+}
+```
+
+```tsx
+/** @renders {} */  // Error: Provide a component name
+function MyHeader() {
+  return <Header />;
+}
+```
+
 ## Comparison with Flow Render Types
 
 | Feature | Flow | This Plugin |
@@ -381,9 +406,9 @@ interface Props {
 
 ## Limitations
 
+- **Typed linting required** - This plugin uses TypeScript's type system for component identity resolution. See [Configuration](#configuration) for setup
 - **Function components only** - Class components are not currently supported
 - **JSDoc-based** - Requires explicit annotations (no inference)
-- **Typed linting required** - See [Configuration](#configuration) for setup instructions
 
 ## TypeScript Integration
 
@@ -408,7 +433,7 @@ function CustomHeader() {
 
 The plugin needs to know what `MyHeader` renders. This requires type information from TypeScript, which is only available with typed linting enabled.
 
-Without typed linting, the plugin will still run but may not catch all errors or may produce false positives.
+Additionally, the plugin uses TypeScript's type system to ensure components are the same type, not just the same name. Two components named `Header` from different files are correctly treated as different types.
 
 ## License
 

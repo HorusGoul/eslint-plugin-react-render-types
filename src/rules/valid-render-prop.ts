@@ -3,12 +3,11 @@ import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
 import { getJSXElementName, isComponentName } from "../utils/component-utils.js";
-import { canRenderComponent } from "../utils/render-chain.js";
+import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
-import type { RendersAnnotation } from "../types/index.js";
+import type { RendersAnnotation, ResolvedRenderMap } from "../types/index.js";
 
 type MessageIds = "invalidRenderProp" | "invalidRenderChildren";
-type RenderMap = Map<string, RendersAnnotation>;
 
 type FunctionNode =
   | TSESTree.FunctionDeclaration
@@ -36,26 +35,19 @@ export default createRule<[], MessageIds>({
     const sourceCode = context.sourceCode;
 
     // Build a map of component names to their @renders annotations
-    const localRenderMap: RenderMap = new Map();
+    const localRenderMap: Map<string, RendersAnnotation> = new Map();
 
     // Store prop annotations from interfaces/types
     // Map of "ComponentName.propName" -> RendersAnnotation
     const propAnnotations = new Map<string, RendersAnnotation>();
 
-    // Try to get typed parser services for cross-file resolution
-    let crossFileResolver: ReturnType<typeof createCrossFileResolver> | null = null;
-    try {
-      const parserServices = ESLintUtils.getParserServices(context, true);
-      if (parserServices.program) {
-        crossFileResolver = createCrossFileResolver({
-          parserServices,
-          sourceCode,
-          filename: context.filename,
-        });
-      }
-    } catch {
-      // Typed linting not enabled, cross-file resolution not available
-    }
+    // Get typed parser services (required for this rule)
+    const parserServices = ESLintUtils.getParserServices(context);
+    const crossFileResolver = createCrossFileResolver({
+      parserServices,
+      sourceCode,
+      filename: context.filename,
+    });
 
     // Queue JSX elements for validation in Program:exit
     const jsxElementsToValidate: TSESTree.JSXElement[] = [];
@@ -99,26 +91,34 @@ export default createRule<[], MessageIds>({
     }
 
     /**
-     * Check if a return is valid for the given annotation
+     * Check if a value is "nullish" (null, undefined, false)
      */
-    function isNullishReturn(name: string): boolean {
+    function isNullishValue(name: string): boolean {
       return name === "null" || name === "undefined" || name === "false";
     }
 
+    /**
+     * Type-aware validation for prop values
+     */
     function isValidValue(
       name: string,
       annotation: RendersAnnotation,
-      renderMap: RenderMap
+      renderMap: ResolvedRenderMap,
+      actualTypeId: string | undefined,
+      expectedTypeId: string | undefined
     ): boolean {
-      if (canRenderComponent(name, annotation.componentName, renderMap)) {
-        return true;
-      }
-
       if (
         (annotation.modifier === "optional" ||
           annotation.modifier === "many") &&
-        isNullishReturn(name)
+        isNullishValue(name)
       ) {
+        return true;
+      }
+
+      if (canRenderComponentTyped(name, annotation.componentName, renderMap, {
+        actualTypeId,
+        expectedTypeId,
+      })) {
         return true;
       }
 
@@ -205,22 +205,15 @@ export default createRule<[], MessageIds>({
      */
     function validateJSXAttribute(
       attr: TSESTree.JSXAttribute,
-      jsxElement: TSESTree.JSXElement,
-      renderMap: RenderMap
+      renderMap: ResolvedRenderMap
     ): void {
       if (attr.name.type !== "JSXIdentifier" || !attr.value) {
         return;
       }
 
       const propName = attr.name.name;
-      const elementName = getJSXElementName(jsxElement);
-
-      if (!elementName) {
-        return;
-      }
 
       // Try to find annotation for this prop
-      // Check all interfaces for matching prop annotation
       let annotation: RendersAnnotation | null = null;
 
       for (const [key, ann] of propAnnotations) {
@@ -243,16 +236,21 @@ export default createRule<[], MessageIds>({
         passedValue = getJSXElementName(attr.value);
       }
 
-      if (passedValue && !isValidValue(passedValue, annotation, renderMap)) {
-        context.report({
-          node: attr.value,
-          messageId: "invalidRenderProp",
-          data: {
-            propName,
-            expected: annotation.componentName,
-            actual: passedValue,
-          },
-        });
+      if (passedValue) {
+        const actualTypeId = crossFileResolver.getComponentTypeId(passedValue) ?? undefined;
+        const expectedTypeId = crossFileResolver.getComponentTypeId(annotation.componentName) ?? undefined;
+
+        if (!isValidValue(passedValue, annotation, renderMap, actualTypeId, expectedTypeId)) {
+          context.report({
+            node: attr.value,
+            messageId: "invalidRenderProp",
+            data: {
+              propName,
+              expected: annotation.componentName,
+              actual: passedValue,
+            },
+          });
+        }
       }
     }
 
@@ -261,7 +259,7 @@ export default createRule<[], MessageIds>({
      */
     function validateJSXChildren(
       node: TSESTree.JSXElement,
-      renderMap: RenderMap
+      renderMap: ResolvedRenderMap
     ): void {
       const elementName = getJSXElementName(node);
       if (!elementName) {
@@ -269,10 +267,8 @@ export default createRule<[], MessageIds>({
       }
 
       // Try to find annotation for this component's children prop
-      // Look for "{ElementName}Props.children" or "{ElementName}.children"
       let annotation: RendersAnnotation | null = null;
 
-      // Check common naming conventions for props interfaces
       const possibleInterfaceNames = [
         `${elementName}Props.children`,
         `${elementName}.children`,
@@ -291,31 +287,39 @@ export default createRule<[], MessageIds>({
         return;
       }
 
+      const expectedTypeId = crossFileResolver.getComponentTypeId(annotation.componentName) ?? undefined;
+
       // Validate each child
       for (const child of node.children) {
         if (child.type === "JSXElement") {
           const childName = getJSXElementName(child);
-          if (childName && !isValidValue(childName, annotation, renderMap)) {
-            context.report({
-              node: child,
-              messageId: "invalidRenderChildren",
-              data: {
-                expected: annotation.componentName,
-                actual: childName,
-              },
-            });
+          if (childName) {
+            const actualTypeId = crossFileResolver.getComponentTypeId(childName) ?? undefined;
+            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId)) {
+              context.report({
+                node: child,
+                messageId: "invalidRenderChildren",
+                data: {
+                  expected: annotation.componentName,
+                  actual: childName,
+                },
+              });
+            }
           }
         } else if (child.type === "JSXExpressionContainer") {
           const childName = getJSXNameFromExpression(child.expression);
-          if (childName && !isValidValue(childName, annotation, renderMap)) {
-            context.report({
-              node: child,
-              messageId: "invalidRenderChildren",
-              data: {
-                expected: annotation.componentName,
-                actual: childName,
-              },
-            });
+          if (childName) {
+            const actualTypeId = crossFileResolver.getComponentTypeId(childName) ?? undefined;
+            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId)) {
+              context.report({
+                node: child,
+                messageId: "invalidRenderChildren",
+                data: {
+                  expected: annotation.componentName,
+                  actual: childName,
+                },
+              });
+            }
           }
         }
       }
@@ -325,27 +329,18 @@ export default createRule<[], MessageIds>({
      * Validate all queued JSX elements
      */
     function validateAllJSXElements(): void {
-      // Build the effective render map:
-      // - If cross-file resolution is available, augment local map with imported components
-      // - Otherwise, use only local definitions
-      let effectiveRenderMap: RenderMap;
-
-      if (crossFileResolver) {
-        effectiveRenderMap = crossFileResolver.buildAugmentedRenderMap(localRenderMap);
-      } else {
-        effectiveRenderMap = localRenderMap;
-      }
+      const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
 
       for (const node of jsxElementsToValidate) {
         // Validate attributes
         for (const attr of node.openingElement.attributes) {
           if (attr.type === "JSXAttribute") {
-            validateJSXAttribute(attr, node, effectiveRenderMap);
+            validateJSXAttribute(attr, resolvedRenderMap);
           }
         }
 
         // Validate children
-        validateJSXChildren(node, effectiveRenderMap);
+        validateJSXChildren(node, resolvedRenderMap);
       }
     }
 
