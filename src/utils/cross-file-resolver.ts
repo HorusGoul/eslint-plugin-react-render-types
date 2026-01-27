@@ -1,6 +1,11 @@
 import type { ParserServicesWithTypeInformation } from "@typescript-eslint/utils";
 import type { SourceCode } from "@typescript-eslint/utils/ts-eslint";
-import type { RendersAnnotation } from "../types/index.js";
+import type {
+  RendersAnnotation,
+  ResolvedRendersAnnotation,
+  ResolvedRenderMap,
+  ComponentTypeId,
+} from "../types/index.js";
 import { parseRendersAnnotation } from "./jsdoc-parser.js";
 import ts from "typescript";
 
@@ -330,11 +335,166 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
     return null;
   }
 
+  /**
+   * Create a unique type ID from a symbol's declaration
+   * Format: "filePath:symbolName"
+   */
+  function createTypeId(symbol: ts.Symbol): ComponentTypeId | null {
+    // Follow aliases to get the original symbol
+    let resolvedSymbol = symbol;
+    while (resolvedSymbol.flags & ts.SymbolFlags.Alias) {
+      const aliasedSymbol = typeChecker.getAliasedSymbol(resolvedSymbol);
+      if (aliasedSymbol === resolvedSymbol) {
+        break;
+      }
+      resolvedSymbol = aliasedSymbol;
+    }
+
+    const declarations = resolvedSymbol.getDeclarations();
+    if (!declarations || declarations.length === 0) {
+      return null;
+    }
+
+    const declaration = declarations[0];
+    const sourceFile = declaration.getSourceFile();
+    const symbolName = resolvedSymbol.getName();
+
+    return `${sourceFile.fileName}:${symbolName}`;
+  }
+
+  /**
+   * Get the type ID for a component by its local name.
+   * Resolves through imports to get the actual source file and symbol.
+   */
+  function getComponentTypeId(componentName: string): ComponentTypeId | null {
+    if (!currentSourceFile) {
+      return null;
+    }
+
+    // Handle namespaced components (e.g., Menu.Item)
+    const parts = componentName.split(".");
+    const baseName = parts[0];
+
+    // Find the symbol for this name in the current scope
+    const symbol = typeChecker.resolveName(
+      baseName,
+      currentSourceFile,
+      ts.SymbolFlags.Value | ts.SymbolFlags.Alias,
+      /* excludeGlobals */ false
+    );
+
+    if (!symbol) {
+      return null;
+    }
+
+    // For namespaced components, we need to resolve the property
+    if (parts.length > 1) {
+      // Get the type of the base component
+      const type = typeChecker.getTypeOfSymbol(symbol);
+      let currentType = type;
+
+      for (let i = 1; i < parts.length; i++) {
+        const prop = currentType.getProperty(parts[i]);
+        if (!prop) {
+          return null;
+        }
+        if (i === parts.length - 1) {
+          return createTypeId(prop);
+        }
+        currentType = typeChecker.getTypeOfSymbol(prop);
+      }
+    }
+
+    return createTypeId(symbol);
+  }
+
+  /**
+   * Resolve the type ID for a component referenced in a @renders annotation.
+   * This looks up the component name in the current file's scope.
+   */
+  function resolveAnnotationTargetTypeId(
+    annotation: RendersAnnotation
+  ): ComponentTypeId | null {
+    return getComponentTypeId(annotation.componentName);
+  }
+
+  /**
+   * Build a resolved render map with type IDs for type-safe validation.
+   * Each annotation includes the targetTypeId if it can be resolved.
+   */
+  function buildResolvedRenderMap(
+    localRenderMap: RenderMap
+  ): ResolvedRenderMap {
+    const resolvedMap: ResolvedRenderMap = new Map();
+
+    if (!currentSourceFile) {
+      // Without type info, just copy the annotations without type IDs
+      for (const [name, annotation] of localRenderMap) {
+        resolvedMap.set(name, { ...annotation });
+      }
+      return resolvedMap;
+    }
+
+    // Process local components
+    for (const [name, annotation] of localRenderMap) {
+      const targetTypeId = resolveAnnotationTargetTypeId(annotation);
+      resolvedMap.set(name, {
+        ...annotation,
+        targetTypeId: targetTypeId ?? undefined,
+      });
+    }
+
+    // Process imported components
+    const imports = collectImports(currentSourceFile);
+    for (const [localName, importInfo] of imports) {
+      if (resolvedMap.has(localName)) {
+        continue;
+      }
+
+      const annotation = getExternalRenderAnnotation(
+        importInfo.originalName,
+        importInfo.importDeclaration
+      );
+
+      if (annotation) {
+        const targetTypeId = resolveAnnotationTargetTypeId(annotation);
+        resolvedMap.set(localName, {
+          ...annotation,
+          targetTypeId: targetTypeId ?? undefined,
+        });
+      }
+    }
+
+    return resolvedMap;
+  }
+
+  /**
+   * Check if two components are the same type (same definition).
+   * This compares type IDs rather than just names.
+   */
+  function isSameComponentType(
+    typeId1: ComponentTypeId | null | undefined,
+    typeId2: ComponentTypeId | null | undefined
+  ): boolean {
+    if (!typeId1 || !typeId2) {
+      // If either type ID is missing, fall back to allowing the match
+      // (this maintains backwards compatibility for non-typed linting)
+      return false;
+    }
+    return typeId1 === typeId2;
+  }
+
   return {
     getExternalRenderAnnotation,
     buildAugmentedRenderMap,
     getAnnotationForComponent,
     collectImports,
+    // New type-safe methods
+    getComponentTypeId,
+    resolveAnnotationTargetTypeId,
+    buildResolvedRenderMap,
+    isSameComponentType,
+    createTypeId,
   };
 }
 
