@@ -24,6 +24,8 @@ Object.assign(plugin.configs, {
       "react-render-types/valid-renders-jsdoc": "warn",
       // Disabled by default - useful for design system folders
       "react-render-types/require-renders-annotation": "off",
+      // Marks components in @renders as used to prevent no-unused-vars errors
+      "react-render-types/renders-uses-vars": "error",
     } satisfies Record<`react-render-types/${RuleKey}`, TSESLint.Linter.RuleLevel>,
   },
 });
