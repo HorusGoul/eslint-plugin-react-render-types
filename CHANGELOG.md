@@ -1,5 +1,24 @@
 # eslint-plugin-react-render-types
 
+## 0.4.0
+
+### Minor Changes
+
+- [#3](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/3) [`964d3b8`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/964d3b870005ff285599435346c15eda1b839cd8) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add `renders-uses-vars` rule to prevent no-unused-vars errors for @renders imports
+
+  This rule marks components referenced in `@renders` annotations as "used", preventing ESLint's `no-unused-vars` from flagging imports that are only used in JSDoc annotations.
+
+  ```tsx
+  import { Header } from "./Header"; // No longer flagged as unused
+
+  /** @renders {Header} */
+  function MyHeader() {
+    return <HeaderWrapper />;
+  }
+  ```
+
+  The rule is enabled by default in the recommended config and works with all import styles including `import type { X }` and `import { type X }`.
+
 ## 0.3.0
 
 ### Minor Changes
