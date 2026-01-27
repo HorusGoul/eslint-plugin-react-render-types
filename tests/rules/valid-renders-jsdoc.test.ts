@@ -78,16 +78,31 @@ ruleTester.run("valid-renders-jsdoc", rule, {
       `,
       filename: "test.tsx",
     },
-    // @renders in prop annotation (valid)
+    // @renders in prop annotation (valid when component is imported)
     {
       name: "@renders in interface prop",
       code: `
+        import { Header } from './Header';
         interface Props {
           /** @renders {Header} */
           header: React.ReactNode;
         }
         function Layout({ header }: Props) {
           return <div>{header}</div>;
+        }
+      `,
+      filename: "test.tsx",
+    },
+    // @renders referencing locally defined component
+    {
+      name: "@renders referencing local component",
+      code: `
+        function Header() {
+          return <header>Header</header>;
+        }
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Header />;
         }
       `,
       filename: "test.tsx",
@@ -249,6 +264,44 @@ ruleTester.run("valid-renders-jsdoc", rule, {
         },
         {
           messageId: "lowercaseComponent",
+        },
+      ],
+    },
+    // Unresolved component reference
+    {
+      name: "unresolved component reference",
+      code: `
+        /** @renders {NonExistentComponent} */
+        function MyComponent() {
+          return <div>Hello</div>;
+        }
+      `,
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "unresolvedComponent",
+          data: {
+            componentName: "NonExistentComponent",
+          },
+        },
+      ],
+    },
+    // Unresolved namespaced component
+    {
+      name: "unresolved namespaced component",
+      code: `
+        /** @renders {Menu.Item} */
+        function MyMenuItem() {
+          return <div>Item</div>;
+        }
+      `,
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "unresolvedComponent",
+          data: {
+            componentName: "Menu.Item",
+          },
         },
       ],
     },
