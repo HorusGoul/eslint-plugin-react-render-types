@@ -22,6 +22,8 @@ Object.assign(plugin.configs, {
       "react-render-types/valid-render-return": "error",
       "react-render-types/valid-render-prop": "error",
       "react-render-types/valid-renders-jsdoc": "warn",
+      // Disabled by default - useful for design system folders
+      "react-render-types/require-renders-annotation": "off",
     } satisfies Record<`react-render-types/${RuleKey}`, TSESLint.Linter.RuleLevel>,
   },
 });
