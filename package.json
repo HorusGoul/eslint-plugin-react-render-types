@@ -34,8 +34,16 @@
     "jsdoc",
     "typescript"
   ],
-  "author": "",
+  "author": "Horus Lugo <hola@horus.dev>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HorusGoul/eslint-plugin-react-render-types.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HorusGoul/eslint-plugin-react-render-types/issues"
+  },
+  "homepage": "https://github.com/HorusGoul/eslint-plugin-react-render-types#readme",
   "packageManager": "pnpm@10.14.0",
   "peerDependencies": {
     "@typescript-eslint/parser": ">=8.0.0",
