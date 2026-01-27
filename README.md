@@ -488,39 +488,6 @@ The plugin needs to know what `MyHeader` renders. This requires type information
 
 Additionally, the plugin uses TypeScript's type system to ensure components are the same type, not just the same name. Two components named `Header` from different files are correctly treated as different types.
 
-### Unused Imports Warning
-
-When using `@renders {Component}`, the component must be imported for type resolution. However, if you're not using the component directly in JSX (e.g., you're returning a wrapper that itself renders the target), ESLint's `no-unused-vars` or `@typescript-eslint/no-unused-vars` may flag it as unused.
-
-**Solutions:**
-
-1. **Disable for the specific line**:
-   ```tsx
-   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-   import { Header } from './Header';
-
-   /** @renders {Header} */
-   function MyHeader() {
-     return <HeaderWrapper />;  // HeaderWrapper @renders {Header}
-   }
-   ```
-
-2. **Configure varsIgnorePattern** to allow underscore-prefixed imports:
-   ```javascript
-   // eslint.config.js
-   {
-     rules: {
-       "@typescript-eslint/no-unused-vars": [
-         "error",
-         { varsIgnorePattern: "^_" }
-       ],
-     },
-   }
-   ```
-   Then prefix unused imports: `import { Header as _Header } from './Header'`
-
-Note: In most cases this isn't an issue because if you're annotating `@renders {Header}`, your component likely returns `<Header />` directly, which counts as usage.
-
 ## License
 
 MIT
