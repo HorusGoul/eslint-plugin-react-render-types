@@ -3,7 +3,8 @@ import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
 import { isComponentName } from "../utils/component-utils.js";
-import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
+import type { createCrossFileResolver } from "../utils/cross-file-resolver.js";
+import { createCrossFileResolver as createResolver } from "../utils/cross-file-resolver.js";
 
 type MessageIds =
   | "missingBraces"
@@ -128,20 +129,13 @@ export default createRule<[], MessageIds>({
       componentName: string;
     }> = [];
 
-    // Try to get typed parser services for better import resolution
-    let crossFileResolver: ReturnType<typeof createCrossFileResolver> | null = null;
-    try {
-      const parserServices = ESLintUtils.getParserServices(context, true);
-      if (parserServices.program) {
-        crossFileResolver = createCrossFileResolver({
-          parserServices,
-          sourceCode,
-          filename: context.filename,
-        });
-      }
-    } catch {
-      // Typed linting not enabled - we'll still check local definitions and imports
-    }
+    // Get typed parser services (required for this rule)
+    const parserServices = ESLintUtils.getParserServices(context);
+    const crossFileResolver: ReturnType<typeof createCrossFileResolver> = createResolver({
+      parserServices,
+      sourceCode,
+      filename: context.filename,
+    });
 
     /**
      * Check if a component name is available in the current file
@@ -165,12 +159,10 @@ export default createRule<[], MessageIds>({
         }
       }
 
-      // If we have cross-file resolution, check if it's a known import with @renders
-      if (crossFileResolver) {
-        const augmentedMap = crossFileResolver.buildAugmentedRenderMap(new Map());
-        if (augmentedMap.has(name)) {
-          return true;
-        }
+      // Use type-based resolution to check if the component is resolvable
+      const typeId = crossFileResolver.getComponentTypeId(name);
+      if (typeId) {
+        return true;
       }
 
       return false;

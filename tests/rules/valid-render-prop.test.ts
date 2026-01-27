@@ -21,12 +21,21 @@ const ruleTester = new RuleTester({
   },
 });
 
+// Helper to add component declarations to test code
+const withComponents = (code: string, components: string[] = []) => {
+  const declarations = components
+    .map((c) => `declare const ${c}: React.FC<any>;`)
+    .join("\n");
+  return declarations ? `${declarations}\n${code}` : code;
+};
+
 ruleTester.run("valid-render-prop", rule, {
   valid: [
     // Direct component to prop
     {
       name: "passing direct component to prop with @renders",
-      code: `
+      code: withComponents(
+        `
         interface MenuProps {
           /** @renders {MenuItem} */
           item: React.ReactNode;
@@ -38,12 +47,15 @@ ruleTester.run("valid-render-prop", rule, {
 
         <Menu item={<MenuItem />} />;
       `,
+        ["MenuItem", "Menu"]
+      ),
       filename: "test.tsx",
     },
     // Component that renders expected type (chained)
     {
       name: "passing component that renders expected type",
-      code: `
+      code: withComponents(
+        `
         /** @renders {MenuItem} */
         function MyMenuItem() {
           return <MenuItem />;
@@ -56,12 +68,15 @@ ruleTester.run("valid-render-prop", rule, {
 
         <Menu item={<MyMenuItem />} />;
       `,
+        ["MenuItem", "Menu"]
+      ),
       filename: "test.tsx",
     },
     // Optional @renders? with null
     {
       name: "optional prop with null",
-      code: `
+      code: withComponents(
+        `
         interface CardProps {
           /** @renders? {CardHeader} */
           header?: React.ReactNode;
@@ -69,12 +84,15 @@ ruleTester.run("valid-render-prop", rule, {
 
         <Card header={null} />;
       `,
+        ["CardHeader", "Card"]
+      ),
       filename: "test.tsx",
     },
     // Children with @renders
     {
       name: "children prop with @renders",
-      code: `
+      code: withComponents(
+        `
         interface TabsProps {
           /** @renders {Tab} */
           children: React.ReactNode;
@@ -84,12 +102,15 @@ ruleTester.run("valid-render-prop", rule, {
           <Tab />
         </Tabs>;
       `,
+        ["Tab", "Tabs"]
+      ),
       filename: "test.tsx",
     },
     // Many renders with multiple children
     {
       name: "many renders with multiple children",
-      code: `
+      code: withComponents(
+        `
         interface ListProps {
           /** @renders* {ListItem} */
           children: React.ReactNode;
@@ -100,24 +121,30 @@ ruleTester.run("valid-render-prop", rule, {
           <ListItem />
         </List>;
       `,
+        ["ListItem", "List"]
+      ),
       filename: "test.tsx",
     },
     // No annotation - should be ignored
     {
       name: "prop without annotation is ignored",
-      code: `
+      code: withComponents(
+        `
         interface MenuProps {
           item: React.ReactNode;
         }
 
         <Menu item={<div>Anything</div>} />;
       `,
+        ["Menu"]
+      ),
       filename: "test.tsx",
     },
     // Prop not using @renders syntax is ignored
     {
       name: "prop with other JSDoc is ignored",
-      code: `
+      code: withComponents(
+        `
         interface MenuProps {
           /** Some description */
           item: React.ReactNode;
@@ -125,6 +152,8 @@ ruleTester.run("valid-render-prop", rule, {
 
         <Menu item={<div>Anything</div>} />;
       `,
+        ["Menu"]
+      ),
       filename: "test.tsx",
     },
   ],
@@ -132,7 +161,8 @@ ruleTester.run("valid-render-prop", rule, {
     // Wrong component passed to prop
     {
       name: "wrong component passed to prop",
-      code: `
+      code: withComponents(
+        `
         /** @renders {Footer} */
         function MyFooter() {
           return <Footer />;
@@ -145,6 +175,8 @@ ruleTester.run("valid-render-prop", rule, {
 
         <Menu item={<MyFooter />} />;
       `,
+        ["Footer", "MenuItem", "Menu"]
+      ),
       filename: "test.tsx",
       errors: [
         {
@@ -160,7 +192,8 @@ ruleTester.run("valid-render-prop", rule, {
     // Primitive element passed when component expected
     {
       name: "primitive element when component expected",
-      code: `
+      code: withComponents(
+        `
         interface MenuProps {
           /** @renders {MenuItem} */
           item: React.ReactNode;
@@ -168,6 +201,8 @@ ruleTester.run("valid-render-prop", rule, {
 
         <Menu item={<div>Not a MenuItem</div>} />;
       `,
+        ["MenuItem", "Menu"]
+      ),
       filename: "test.tsx",
       errors: [
         {
@@ -183,7 +218,8 @@ ruleTester.run("valid-render-prop", rule, {
     // Children mismatch
     {
       name: "children type mismatch",
-      code: `
+      code: withComponents(
+        `
         interface TabsProps {
           /** @renders {Tab} */
           children: React.ReactNode;
@@ -193,6 +229,8 @@ ruleTester.run("valid-render-prop", rule, {
           <Button />
         </Tabs>;
       `,
+        ["Tab", "Button", "Tabs"]
+      ),
       filename: "test.tsx",
       errors: [
         {
@@ -207,7 +245,8 @@ ruleTester.run("valid-render-prop", rule, {
     // Optional but wrong component
     {
       name: "optional prop with wrong component",
-      code: `
+      code: withComponents(
+        `
         interface CardProps {
           /** @renders? {CardHeader} */
           header?: React.ReactNode;
@@ -215,6 +254,8 @@ ruleTester.run("valid-render-prop", rule, {
 
         <Card header={<Footer />} />;
       `,
+        ["CardHeader", "Footer", "Card"]
+      ),
       filename: "test.tsx",
       errors: [
         {

@@ -2,7 +2,6 @@ import type { ParserServicesWithTypeInformation } from "@typescript-eslint/utils
 import type { SourceCode } from "@typescript-eslint/utils/ts-eslint";
 import type {
   RendersAnnotation,
-  ResolvedRendersAnnotation,
   ResolvedRenderMap,
   ComponentTypeId,
 } from "../types/index.js";
@@ -15,12 +14,6 @@ export interface CrossFileResolverOptions {
   parserServices: ParserServicesWithTypeInformation;
   sourceCode: SourceCode;
   filename: string;
-}
-
-export interface ResolvedComponent {
-  name: string;
-  filePath: string;
-  annotation: RendersAnnotation | null;
 }
 
 /**
@@ -40,7 +33,7 @@ export function clearAnnotationCache(): void {
 
 /**
  * Create a cross-file resolver for resolving @renders annotations
- * from imported components.
+ * from imported components using TypeScript's type system.
  */
 export function createCrossFileResolver(options: CrossFileResolverOptions) {
   const { parserServices, filename } = options;
@@ -158,10 +151,10 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
     }
 
     // Resolve the module to its source file
-    const currentSourceFile = importDeclaration.getSourceFile();
+    const importSourceFile = importDeclaration.getSourceFile();
     const resolvedModule = ts.resolveModuleName(
       moduleSpecifier.text,
-      currentSourceFile.fileName,
+      importSourceFile.fileName,
       program.getCompilerOptions(),
       ts.sys
     );
@@ -260,79 +253,9 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
           });
         }
       }
-
-      // Namespace import: import * as Foo from '...'
-      if (namedBindings && ts.isNamespaceImport(namedBindings)) {
-        // For namespace imports, we'd need special handling for Foo.Component
-        // This is handled separately in augmentRenderMapWithImports
-      }
     });
 
     return imports;
-  }
-
-  /**
-   * Build an augmented render map that includes annotations from imported components.
-   * This merges local annotations with external ones.
-   */
-  function buildAugmentedRenderMap(localRenderMap: RenderMap): RenderMap {
-    const augmentedMap = new Map(localRenderMap);
-
-    if (!currentSourceFile) {
-      return augmentedMap;
-    }
-
-    const imports = collectImports(currentSourceFile);
-
-    // For each imported component, try to get its @renders annotation
-    for (const [localName, importInfo] of imports) {
-      // Skip if we already have a local definition
-      if (augmentedMap.has(localName)) {
-        continue;
-      }
-
-      const annotation = getExternalRenderAnnotation(
-        importInfo.originalName,
-        importInfo.importDeclaration
-      );
-
-      if (annotation) {
-        augmentedMap.set(localName, annotation);
-      }
-    }
-
-    return augmentedMap;
-  }
-
-  /**
-   * Get @renders annotation for a component by name.
-   * First checks local definitions, then imports.
-   */
-  function getAnnotationForComponent(
-    componentName: string,
-    localRenderMap: RenderMap
-  ): RendersAnnotation | null {
-    // Check local map first
-    if (localRenderMap.has(componentName)) {
-      return localRenderMap.get(componentName)!;
-    }
-
-    if (!currentSourceFile) {
-      return null;
-    }
-
-    // Check imports
-    const imports = collectImports(currentSourceFile);
-    const importInfo = imports.get(componentName);
-
-    if (importInfo) {
-      return getExternalRenderAnnotation(
-        importInfo.originalName,
-        importInfo.importDeclaration
-      );
-    }
-
-    return null;
   }
 
   /**
@@ -428,7 +351,7 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
     const resolvedMap: ResolvedRenderMap = new Map();
 
     if (!currentSourceFile) {
-      // Without type info, just copy the annotations without type IDs
+      // Without source file, just copy the annotations without type IDs
       for (const [name, annotation] of localRenderMap) {
         resolvedMap.set(name, { ...annotation });
       }
@@ -468,56 +391,8 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
     return resolvedMap;
   }
 
-  /**
-   * Check if two components are the same type (same definition).
-   * This compares type IDs rather than just names.
-   */
-  function isSameComponentType(
-    typeId1: ComponentTypeId | null | undefined,
-    typeId2: ComponentTypeId | null | undefined
-  ): boolean {
-    if (!typeId1 || !typeId2) {
-      // If either type ID is missing, fall back to allowing the match
-      // (this maintains backwards compatibility for non-typed linting)
-      return false;
-    }
-    return typeId1 === typeId2;
-  }
-
   return {
-    getExternalRenderAnnotation,
-    buildAugmentedRenderMap,
-    getAnnotationForComponent,
-    collectImports,
-    // New type-safe methods
     getComponentTypeId,
-    resolveAnnotationTargetTypeId,
     buildResolvedRenderMap,
-    isSameComponentType,
-    createTypeId,
   };
-}
-
-/**
- * Try to get parser services, returning null if typed linting is not enabled.
- */
-export function tryGetTypedParserServices(
-  context: Parameters<typeof createCrossFileResolver>[0]["parserServices"] extends infer T
-    ? { parserServices?: T }
-    : never
-): ParserServicesWithTypeInformation | null {
-  try {
-    const services = context.parserServices;
-    if (
-      services &&
-      "program" in services &&
-      services.program &&
-      "esTreeNodeToTSNodeMap" in services
-    ) {
-      return services as ParserServicesWithTypeInformation;
-    }
-  } catch {
-    // Parser services not available
-  }
-  return null;
 }
