@@ -540,8 +540,8 @@ This rule works similarly to `eslint-plugin-react`'s `jsx-uses-vars` rule.
 | Syntax | `renders Header` | `@renders {Header}` |
 | Optional | `renders? Header` | `@renders? {Header}` |
 | Many | `renders* Header` | `@renders* {Header}` |
-| Union types | — | `@renders {A \| B}` |
-| Type alias unions | — | `@renders {MyAlias}` (resolves `type MyAlias = A \| B`) |
+| Union types | ✓ (language feature) | `@renders {A \| B}` |
+| Type alias unions | ✓ (language feature) | `@renders {MyAlias}` (resolves `type MyAlias = A \| B`) |
 | Chained rendering | ✓ | ✓ |
 | Props validation | ✓ | ✓ |
 | Children validation | ✓ | ✓ |
