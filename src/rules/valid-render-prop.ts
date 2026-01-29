@@ -354,6 +354,14 @@ export default createRule<[], MessageIds>({
     function validateAllJSXElements(): void {
       const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
 
+      // Expand type aliases in prop annotations
+      for (const [key, annotation] of propAnnotations) {
+        const expanded = crossFileResolver.expandTypeAliases(annotation);
+        if (expanded !== annotation) {
+          propAnnotations.set(key, expanded);
+        }
+      }
+
       for (const node of jsxElementsToValidate) {
         // Validate attributes
         for (const attr of node.openingElement.attributes) {

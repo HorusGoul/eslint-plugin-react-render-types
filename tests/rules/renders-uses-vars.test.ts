@@ -235,6 +235,20 @@ ruleTester.run("renders-uses-vars", rule, {
       `,
       filename: "test.tsx",
     },
+    // Type alias name in @renders is marked as used
+    {
+      name: "marks type alias name as used",
+      code: `
+        import { Header } from './Header';
+        import { Footer } from './Footer';
+        type LayoutComponent = Header | Footer;
+        /** @renders {LayoutComponent} */
+        function MyLayout() {
+          return <div />;
+        }
+      `,
+      filename: "test.tsx",
+    },
   ],
   // This rule never reports errors - it only marks variables as used
   invalid: [],
