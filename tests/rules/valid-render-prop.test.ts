@@ -125,6 +125,95 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // Union type in prop annotation - valid component
+    {
+      name: "union type prop with valid first component",
+      code: withComponents(
+        `
+        interface LayoutProps {
+          /** @renders {Header | Footer} */
+          slot: React.ReactNode;
+        }
+
+        <Layout slot={<Header />} />;
+      `,
+        ["Header", "Footer", "Layout"]
+      ),
+      filename: "test.tsx",
+    },
+    // Union type in prop annotation - valid second component
+    {
+      name: "union type prop with valid second component",
+      code: withComponents(
+        `
+        interface LayoutProps {
+          /** @renders {Header | Footer} */
+          slot: React.ReactNode;
+        }
+
+        <Layout slot={<Footer />} />;
+      `,
+        ["Header", "Footer", "Layout"]
+      ),
+      filename: "test.tsx",
+    },
+    // Union type in children annotation
+    {
+      name: "union type children with valid component",
+      code: withComponents(
+        `
+        interface MenuProps {
+          /** @renders {MenuItem | Divider} */
+          children: React.ReactNode;
+        }
+
+        <Menu>
+          <MenuItem />
+          <Divider />
+        </Menu>;
+      `,
+        ["MenuItem", "Divider", "Menu"]
+      ),
+      filename: "test.tsx",
+    },
+    // Type alias union in prop annotation
+    {
+      name: "type alias union in prop annotation",
+      code: withComponents(
+        `
+        type LayoutSlot = Header | Footer;
+
+        interface LayoutProps {
+          /** @renders {LayoutSlot} */
+          slot: React.ReactNode;
+        }
+
+        <Layout slot={<Header />} />;
+      `,
+        ["Header", "Footer", "Layout"]
+      ),
+      filename: "test.tsx",
+    },
+    // Type alias union in children annotation
+    {
+      name: "type alias union in children annotation",
+      code: withComponents(
+        `
+        type MenuChild = MenuItem | Divider;
+
+        interface MenuProps {
+          /** @renders {MenuChild} */
+          children: React.ReactNode;
+        }
+
+        <Menu>
+          <MenuItem />
+        </Menu>;
+      `,
+        ["MenuItem", "Divider", "Menu"]
+      ),
+      filename: "test.tsx",
+    },
     // No annotation - should be ignored
     {
       name: "prop without annotation is ignored",
@@ -237,6 +326,59 @@ ruleTester.run("valid-render-prop", rule, {
           messageId: "invalidRenderChildren",
           data: {
             expected: "Tab",
+            actual: "Button",
+          },
+        },
+      ],
+    },
+    // Union type prop - wrong component
+    {
+      name: "union type prop with wrong component",
+      code: withComponents(
+        `
+        interface LayoutProps {
+          /** @renders {Header | Footer} */
+          slot: React.ReactNode;
+        }
+
+        <Layout slot={<Sidebar />} />;
+      `,
+        ["Header", "Footer", "Sidebar", "Layout"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "slot",
+            expected: "Header | Footer",
+            actual: "Sidebar",
+          },
+        },
+      ],
+    },
+    // Union type children - wrong component
+    {
+      name: "union type children with wrong component",
+      code: withComponents(
+        `
+        interface MenuProps {
+          /** @renders {MenuItem | Divider} */
+          children: React.ReactNode;
+        }
+
+        <Menu>
+          <Button />
+        </Menu>;
+      `,
+        ["MenuItem", "Divider", "Button", "Menu"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "MenuItem | Divider",
             actual: "Button",
           },
         },

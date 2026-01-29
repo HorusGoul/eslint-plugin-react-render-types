@@ -269,6 +269,220 @@ ruleTester.run("valid-render-return", rule, {
       ),
       filename: "test.tsx",
     },
+    // Union type - returning first component is valid
+    {
+      name: "union type returning first component",
+      code: withComponents(
+        `
+        /** @renders {Header | Footer} */
+        function FlexComponent() {
+          return <Header />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Union type - returning second component is valid
+    {
+      name: "union type returning second component",
+      code: withComponents(
+        `
+        /** @renders {Header | Footer} */
+        function FlexComponent() {
+          return <Footer />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Union type with conditional return
+    {
+      name: "union type with conditional return",
+      code: withComponents(
+        `
+        /** @renders {Header | Footer} */
+        function FlexComponent({ isHeader }: { isHeader: boolean }) {
+          if (isHeader) {
+            return <Header />;
+          }
+          return <Footer />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Union type with three components
+    {
+      name: "union type with three components",
+      code: withComponents(
+        `
+        /** @renders {Header | Sidebar | Footer} */
+        function FlexComponent({ type }: { type: string }) {
+          if (type === "header") return <Header />;
+          if (type === "sidebar") return <Sidebar />;
+          return <Footer />;
+        }
+      `,
+        ["Header", "Sidebar", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Optional union type
+    {
+      name: "optional union type with null return",
+      code: withComponents(
+        `
+        /** @renders? {Header | Footer} */
+        function MaybeFlexComponent({ show }: { show: boolean }) {
+          if (!show) return null;
+          return <Header />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Large union type with five components
+    {
+      name: "large union type with five components",
+      code: withComponents(
+        `
+        /** @renders {Header | Sidebar | Content | Footer | Navigation} */
+        function LayoutSection({ type }: { type: string }) {
+          switch (type) {
+            case "header": return <Header />;
+            case "sidebar": return <Sidebar />;
+            case "content": return <Content />;
+            case "footer": return <Footer />;
+            default: return <Navigation />;
+          }
+        }
+      `,
+        ["Header", "Sidebar", "Content", "Footer", "Navigation"]
+      ),
+      filename: "test.tsx",
+    },
+    // Large union type returning any valid component
+    {
+      name: "large union type returning middle component",
+      code: withComponents(
+        `
+        /** @renders {A | B | C | D | E | F | G} */
+        function AlphaComponent() {
+          return <D />;
+        }
+      `,
+        ["A", "B", "C", "D", "E", "F", "G"]
+      ),
+      filename: "test.tsx",
+    },
+    // Large union with @renders* modifier
+    {
+      name: "large union with many modifier",
+      code: withComponents(
+        `
+        /** @renders* {MenuItem | Divider | SubMenu | MenuGroup} */
+        function MenuContent() {
+          return (
+            <>
+              <MenuItem />
+              <Divider />
+              <SubMenu />
+            </>
+          );
+        }
+      `,
+        ["MenuItem", "Divider", "SubMenu", "MenuGroup"]
+      ),
+      filename: "test.tsx",
+    },
+    // Type alias union - returning first component is valid
+    {
+      name: "type alias union returning first component",
+      code: withComponents(
+        `
+        type LayoutComponent = Header | Footer;
+        /** @renders {LayoutComponent} */
+        function MyLayout() {
+          return <Header />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Type alias union - returning second component is valid
+    {
+      name: "type alias union returning second component",
+      code: withComponents(
+        `
+        type LayoutComponent = Header | Footer;
+        /** @renders {LayoutComponent} */
+        function MyLayout() {
+          return <Footer />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Type alias union with three components
+    {
+      name: "type alias union with three components",
+      code: withComponents(
+        `
+        type FlexComponent = Header | Sidebar | Footer;
+        /** @renders {FlexComponent} */
+        function MyFlex({ type }: { type: string }) {
+          if (type === "header") return <Header />;
+          if (type === "sidebar") return <Sidebar />;
+          return <Footer />;
+        }
+      `,
+        ["Header", "Sidebar", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Type alias union with optional modifier
+    {
+      name: "type alias union with optional modifier",
+      code: withComponents(
+        `
+        type LayoutComponent = Header | Footer;
+        /** @renders? {LayoutComponent} */
+        function MaybeLayout({ show }: { show: boolean }) {
+          if (!show) return null;
+          return <Header />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Large type alias union with five components
+    {
+      name: "large type alias union with five components",
+      code: withComponents(
+        `
+        type LayoutSection = Header | Sidebar | Content | Footer | Navigation;
+        /** @renders {LayoutSection} */
+        function Section({ type }: { type: string }) {
+          switch (type) {
+            case "header": return <Header />;
+            case "sidebar": return <Sidebar />;
+            case "content": return <Content />;
+            case "footer": return <Footer />;
+            default: return <Navigation />;
+          }
+        }
+      `,
+        ["Header", "Sidebar", "Content", "Footer", "Navigation"]
+      ),
+      filename: "test.tsx",
+    },
   ],
   invalid: [
     // Wrong component returned
@@ -478,6 +692,194 @@ ruleTester.run("valid-render-return", rule, {
           data: {
             expected: "Header",
             actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Union type - returning component not in union is invalid
+    {
+      name: "union type returning component not in union",
+      code: withComponents(
+        `
+        /** @renders {Header | Footer} */
+        function FlexComponent() {
+          return <Sidebar />;
+        }
+      `,
+        ["Header", "Footer", "Sidebar"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header | Footer",
+            actual: "Sidebar",
+          },
+        },
+      ],
+    },
+    // Union type - returning primitive JSX is invalid
+    {
+      name: "union type returning primitive JSX",
+      code: withComponents(
+        `
+        /** @renders {Header | Footer} */
+        function FlexComponent() {
+          return <div>Not a Header or Footer</div>;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header | Footer",
+            actual: "div",
+          },
+        },
+      ],
+    },
+    // Large union type - returning component not in union
+    {
+      name: "large union type returning component not in union",
+      code: withComponents(
+        `
+        /** @renders {Header | Sidebar | Content | Footer | Navigation} */
+        function LayoutSection() {
+          return <Button />;
+        }
+      `,
+        ["Header", "Sidebar", "Content", "Footer", "Navigation", "Button"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header | Sidebar | Content | Footer | Navigation",
+            actual: "Button",
+          },
+        },
+      ],
+    },
+    // Large union type with seven components - invalid return
+    {
+      name: "large union with seven components returning invalid",
+      code: withComponents(
+        `
+        /** @renders {A | B | C | D | E | F | G} */
+        function AlphaComponent() {
+          return <H />;
+        }
+      `,
+        ["A", "B", "C", "D", "E", "F", "G", "H"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "A | B | C | D | E | F | G",
+            actual: "H",
+          },
+        },
+      ],
+    },
+    // Type alias union - returning component not in union is invalid
+    {
+      name: "type alias union returning component not in union",
+      code: withComponents(
+        `
+        type LayoutComponent = Header | Footer;
+        /** @renders {LayoutComponent} */
+        function MyLayout() {
+          return <Sidebar />;
+        }
+      `,
+        ["Header", "Footer", "Sidebar"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header | Footer",
+            actual: "Sidebar",
+          },
+        },
+      ],
+    },
+    // Type alias union - returning primitive JSX is invalid
+    {
+      name: "type alias union returning primitive JSX",
+      code: withComponents(
+        `
+        type LayoutComponent = Header | Footer;
+        /** @renders {LayoutComponent} */
+        function MyLayout() {
+          return <div>Not valid</div>;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header | Footer",
+            actual: "div",
+          },
+        },
+      ],
+    },
+    // Type alias union with required modifier - returning null is invalid
+    {
+      name: "type alias union required returning null",
+      code: withComponents(
+        `
+        type LayoutComponent = Header | Footer;
+        /** @renders {LayoutComponent} */
+        function MyLayout() {
+          return null;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header | Footer",
+            actual: "null",
+          },
+        },
+      ],
+    },
+    // Large type alias union - invalid return
+    {
+      name: "large type alias union returning invalid component",
+      code: withComponents(
+        `
+        type LayoutSection = Header | Sidebar | Content | Footer | Navigation;
+        /** @renders {LayoutSection} */
+        function Section() {
+          return <Button />;
+        }
+      `,
+        ["Header", "Sidebar", "Content", "Footer", "Navigation", "Button"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header | Sidebar | Content | Footer | Navigation",
+            actual: "Button",
           },
         },
       ],

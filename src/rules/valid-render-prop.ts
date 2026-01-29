@@ -98,14 +98,34 @@ export default createRule<[], MessageIds>({
     }
 
     /**
-     * Type-aware validation for prop values
+     * Format expected components for error message
+     */
+    function formatExpected(annotation: RendersAnnotation): string {
+      if (annotation.componentNames.length === 1) {
+        return annotation.componentName;
+      }
+      return annotation.componentNames.join(" | ");
+    }
+
+    /**
+     * Get all expected type IDs for an annotation (supports union types)
+     */
+    function getExpectedTypeIds(annotation: RendersAnnotation): string[] {
+      return annotation.componentNames
+        .map((name) => crossFileResolver.getComponentTypeId(name))
+        .filter((id): id is string => id !== null);
+    }
+
+    /**
+     * Type-aware validation for prop values (supports union types)
      */
     function isValidValue(
       name: string,
       annotation: RendersAnnotation,
       renderMap: ResolvedRenderMap,
       actualTypeId: string | undefined,
-      expectedTypeId: string | undefined
+      expectedTypeId: string | undefined,
+      expectedTypeIds: string[] | undefined
     ): boolean {
       if (
         (annotation.modifier === "optional" ||
@@ -118,6 +138,7 @@ export default createRule<[], MessageIds>({
       if (canRenderComponentTyped(name, annotation.componentName, renderMap, {
         actualTypeId,
         expectedTypeId,
+        expectedTypeIds,
       })) {
         return true;
       }
@@ -239,14 +260,15 @@ export default createRule<[], MessageIds>({
       if (passedValue) {
         const actualTypeId = crossFileResolver.getComponentTypeId(passedValue) ?? undefined;
         const expectedTypeId = crossFileResolver.getComponentTypeId(annotation.componentName) ?? undefined;
+        const expectedTypeIds = getExpectedTypeIds(annotation);
 
-        if (!isValidValue(passedValue, annotation, renderMap, actualTypeId, expectedTypeId)) {
+        if (!isValidValue(passedValue, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
           context.report({
             node: attr.value,
             messageId: "invalidRenderProp",
             data: {
               propName,
-              expected: annotation.componentName,
+              expected: formatExpected(annotation),
               actual: passedValue,
             },
           });
@@ -288,6 +310,7 @@ export default createRule<[], MessageIds>({
       }
 
       const expectedTypeId = crossFileResolver.getComponentTypeId(annotation.componentName) ?? undefined;
+      const expectedTypeIds = getExpectedTypeIds(annotation);
 
       // Validate each child
       for (const child of node.children) {
@@ -295,12 +318,12 @@ export default createRule<[], MessageIds>({
           const childName = getJSXElementName(child);
           if (childName) {
             const actualTypeId = crossFileResolver.getComponentTypeId(childName) ?? undefined;
-            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId)) {
+            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
               context.report({
                 node: child,
                 messageId: "invalidRenderChildren",
                 data: {
-                  expected: annotation.componentName,
+                  expected: formatExpected(annotation),
                   actual: childName,
                 },
               });
@@ -310,12 +333,12 @@ export default createRule<[], MessageIds>({
           const childName = getJSXNameFromExpression(child.expression);
           if (childName) {
             const actualTypeId = crossFileResolver.getComponentTypeId(childName) ?? undefined;
-            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId)) {
+            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
               context.report({
                 node: child,
                 messageId: "invalidRenderChildren",
                 data: {
-                  expected: annotation.componentName,
+                  expected: formatExpected(annotation),
                   actual: childName,
                 },
               });
@@ -330,6 +353,14 @@ export default createRule<[], MessageIds>({
      */
     function validateAllJSXElements(): void {
       const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
+
+      // Expand type aliases in prop annotations
+      for (const [key, annotation] of propAnnotations) {
+        const expanded = crossFileResolver.expandTypeAliases(annotation);
+        if (expanded !== annotation) {
+          propAnnotations.set(key, expanded);
+        }
+      }
 
       for (const node of jsxElementsToValidate) {
         // Validate attributes

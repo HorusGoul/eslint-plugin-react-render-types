@@ -161,6 +161,94 @@ ruleTester.run("renders-uses-vars", rule, {
       `,
       filename: "test.tsx",
     },
+    // Union type - marks all components as used
+    {
+      name: "marks all union type components as used",
+      code: `
+        import { Header } from './Header';
+        import { Footer } from './Footer';
+        /** @renders {Header | Footer} */
+        function FlexComponent() {
+          return <div />;
+        }
+      `,
+      filename: "test.tsx",
+    },
+    // Union type with three components
+    {
+      name: "marks all three union components as used",
+      code: `
+        import { Header } from './Header';
+        import { Sidebar } from './Sidebar';
+        import { Footer } from './Footer';
+        /** @renders {Header | Sidebar | Footer} */
+        function FlexComponent() {
+          return <div />;
+        }
+      `,
+      filename: "test.tsx",
+    },
+    // Union type with namespaced components
+    {
+      name: "marks namespaced union components as used",
+      code: `
+        import { Menu } from './Menu';
+        import { List } from './List';
+        /** @renders {Menu.Item | List.Item} */
+        function GenericItem() {
+          return <div />;
+        }
+      `,
+      filename: "test.tsx",
+    },
+    // Large union type with five components
+    {
+      name: "marks all five union components as used",
+      code: `
+        import { Header } from './Header';
+        import { Sidebar } from './Sidebar';
+        import { Content } from './Content';
+        import { Footer } from './Footer';
+        import { Navigation } from './Navigation';
+        /** @renders {Header | Sidebar | Content | Footer | Navigation} */
+        function LayoutSection() {
+          return <div />;
+        }
+      `,
+      filename: "test.tsx",
+    },
+    // Large union type with seven components
+    {
+      name: "marks all seven union components as used",
+      code: `
+        import { A } from './A';
+        import { B } from './B';
+        import { C } from './C';
+        import { D } from './D';
+        import { E } from './E';
+        import { F } from './F';
+        import { G } from './G';
+        /** @renders {A | B | C | D | E | F | G} */
+        function AlphaComponent() {
+          return <div />;
+        }
+      `,
+      filename: "test.tsx",
+    },
+    // Type alias name in @renders is marked as used
+    {
+      name: "marks type alias name as used",
+      code: `
+        import { Header } from './Header';
+        import { Footer } from './Footer';
+        type LayoutComponent = Header | Footer;
+        /** @renders {LayoutComponent} */
+        function MyLayout() {
+          return <div />;
+        }
+      `,
+      filename: "test.tsx",
+    },
   ],
   // This rule never reports errors - it only marks variables as used
   invalid: [],

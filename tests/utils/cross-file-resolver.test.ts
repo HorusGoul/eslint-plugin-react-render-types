@@ -49,4 +49,21 @@ describe("cross-file-resolver", () => {
       expect(true).toBe(true);
     });
   });
+
+  // Type alias expansion is tested via integration tests in:
+  // - tests/rules/valid-render-return.test.ts (type alias union valid/invalid cases)
+  // - tests/rules/valid-render-prop.test.ts (type alias union in prop annotations)
+  //
+  // These tests exercise the full pipeline:
+  //   1. JSDoc parser sees @renders {LayoutComponent} as a single component
+  //   2. Cross-file resolver's expandTypeAliases() resolves the type alias
+  //   3. TypeScript type checker finds "type LayoutComponent = Header | Footer"
+  //   4. Union members are extracted and used for validation
+  //
+  // Example:
+  //   type LayoutComponent = Header | Footer;
+  //   /** @renders {LayoutComponent} */
+  //   function MyLayout() {
+  //     return <Header />;  // Valid - Header is in LayoutComponent union
+  //   }
 });

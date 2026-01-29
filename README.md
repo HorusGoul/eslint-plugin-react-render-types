@@ -213,6 +213,71 @@ function BadItems() {
 }
 ```
 
+### `@renders {A | B}` - Union Types
+
+The component **must** render one of the specified component types.
+
+```tsx
+/** @renders {Header | Footer} */
+function LayoutSection({ type }: { type: string }) {
+  if (type === "header") return <Header />;  // ✓ Valid
+  return <Footer />;                          // ✓ Valid
+}
+
+/** @renders {Header | Footer} */
+function BadSection() {
+  return <Sidebar />;  // ✗ Error: Expected Header | Footer, got Sidebar
+}
+```
+
+Union types work with all modifiers:
+
+```tsx
+/** @renders? {Header | Footer} */
+function MaybeSection({ show }: { show: boolean }) {
+  if (!show) return null;  // ✓ Valid - optional
+  return <Header />;       // ✓ Valid
+}
+
+/** @renders* {MenuItem | Divider} */
+function MenuContent() {
+  return (
+    <>
+      <MenuItem />
+      <Divider />
+    </>
+  );  // ✓ Valid - multiple elements from union
+}
+```
+
+### Type Alias Unions
+
+You can use TypeScript type aliases to define union types and reference them in `@renders` annotations:
+
+```tsx
+type LayoutSlot = Header | Footer | Sidebar;
+
+/** @renders {LayoutSlot} */
+function Section({ type }: { type: string }) {
+  if (type === "header") return <Header />;
+  if (type === "sidebar") return <Sidebar />;
+  return <Footer />;
+}
+```
+
+This also works with prop annotations:
+
+```tsx
+type MenuChild = MenuItem | Divider;
+
+interface MenuProps {
+  /** @renders {MenuChild} */
+  children: React.ReactNode;
+}
+```
+
+The plugin resolves the type alias at lint time using TypeScript's type checker, expanding it to the underlying union members for validation.
+
 ## Chained Rendering
 
 Components can satisfy render types through other components that themselves have `@renders` annotations:
@@ -475,6 +540,8 @@ This rule works similarly to `eslint-plugin-react`'s `jsx-uses-vars` rule.
 | Syntax | `renders Header` | `@renders {Header}` |
 | Optional | `renders? Header` | `@renders? {Header}` |
 | Many | `renders* Header` | `@renders* {Header}` |
+| Union types | — | `@renders {A \| B}` |
+| Type alias unions | — | `@renders {MyAlias}` (resolves `type MyAlias = A \| B`) |
 | Chained rendering | ✓ | ✓ |
 | Props validation | ✓ | ✓ |
 | Children validation | ✓ | ✓ |

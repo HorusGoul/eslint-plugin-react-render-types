@@ -209,7 +209,8 @@ export default createRule<[], MessageIds>({
       annotation: RendersAnnotation,
       renderMap: ResolvedRenderMap,
       actualTypeId: string | undefined,
-      expectedTypeId: string | undefined
+      expectedTypeId: string | undefined,
+      expectedTypeIds: string[] | undefined
     ): boolean {
       // For optional and many modifiers, null/undefined/false are valid
       if (
@@ -225,15 +226,26 @@ export default createRule<[], MessageIds>({
         return true;
       }
 
-      // Type-aware match through render chain
+      // Type-aware match through render chain (supports union types)
       if (canRenderComponentTyped(name, annotation.componentName, renderMap, {
         actualTypeId,
         expectedTypeId,
+        expectedTypeIds,
       })) {
         return true;
       }
 
       return false;
+    }
+
+    /**
+     * Format expected components for error message
+     */
+    function formatExpected(annotation: RendersAnnotation): string {
+      if (annotation.componentNames.length === 1) {
+        return annotation.componentName;
+      }
+      return annotation.componentNames.join(" | ");
     }
 
     /**
@@ -243,9 +255,15 @@ export default createRule<[], MessageIds>({
       // Build the resolved render map with type IDs
       const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
 
-      for (const { node, annotation } of functionsToValidate) {
-        // Get the expected type ID for the annotation target
-        const expectedTypeId = crossFileResolver.getComponentTypeId(annotation.componentName) ?? undefined;
+      for (const { node, annotation, componentName } of functionsToValidate) {
+        // Use the expanded annotation from the resolved render map (handles type alias expansion)
+        const expandedAnnotation = resolvedRenderMap.get(componentName) ?? annotation;
+
+        // Get the expected type IDs for the annotation target (supports union types)
+        const expectedTypeId = crossFileResolver.getComponentTypeId(expandedAnnotation.componentName) ?? undefined;
+        const expectedTypeIds = expandedAnnotation.componentNames
+          .map((name) => crossFileResolver.getComponentTypeId(name))
+          .filter((id): id is string => id !== null);
 
         // Collect all return statements/expressions
         const returnedNames: Array<{ name: string; node: TSESTree.Node }> = [];
@@ -276,12 +294,12 @@ export default createRule<[], MessageIds>({
           // Get the actual type ID for the returned component
           const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
 
-          if (!isValidReturn(name, annotation, resolvedRenderMap, actualTypeId, expectedTypeId)) {
+          if (!isValidReturn(name, expandedAnnotation, resolvedRenderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
             context.report({
               node: returnNode,
               messageId: "invalidRenderReturn",
               data: {
-                expected: annotation.componentName,
+                expected: formatExpected(expandedAnnotation),
                 actual: name,
               },
             });

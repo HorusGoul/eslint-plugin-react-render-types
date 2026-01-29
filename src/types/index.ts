@@ -2,8 +2,16 @@
  * Represents a parsed @renders annotation from JSDoc
  */
 export interface RendersAnnotation {
-  /** The component name to render (e.g., "Header", "Menu.Item") */
+  /**
+   * The primary component name (first in union, e.g., "Header" from "Header | Footer").
+   * For backwards compatibility.
+   */
   componentName: string;
+  /**
+   * All component names in a union type (e.g., ["Header", "Footer"] for "@renders {Header | Footer}").
+   * For non-union types, this contains the single componentName.
+   */
+  componentNames: string[];
   /** The modifier type */
   modifier: "required" | "optional" | "many";
   /** The raw annotation text */
@@ -21,8 +29,10 @@ export type ComponentTypeId = string;
  * for cross-file type-safe matching.
  */
 export interface ResolvedRendersAnnotation extends RendersAnnotation {
-  /** Unique type identifier for the target component (filePath:symbolName) */
+  /** Unique type identifier for the primary target component (filePath:symbolName) */
   targetTypeId?: ComponentTypeId;
+  /** Type IDs for all components in a union type */
+  targetTypeIds?: ComponentTypeId[];
 }
 
 /**
