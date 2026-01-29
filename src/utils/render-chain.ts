@@ -12,21 +12,84 @@ const DEFAULT_MAX_DEPTH = 10;
 export interface TypeAwareValidationOptions {
   /** The type ID of the actual component being used/returned */
   actualTypeId?: ComponentTypeId;
-  /** The expected type ID from the @renders annotation target */
+  /** The expected type ID from the @renders annotation target (primary) */
   expectedTypeId?: ComponentTypeId;
+  /** All expected type IDs when @renders uses a union type */
+  expectedTypeIds?: ComponentTypeId[];
+}
+
+/**
+ * Check if an actual type ID matches any of the expected type IDs
+ */
+function matchesAnyExpectedType(
+  actualTypeId: ComponentTypeId | undefined,
+  expectedTypeId: ComponentTypeId | undefined,
+  expectedTypeIds: ComponentTypeId[] | undefined
+): boolean {
+  if (!actualTypeId) {
+    return false;
+  }
+
+  // Check against single expected type ID
+  if (expectedTypeId && actualTypeId === expectedTypeId) {
+    return true;
+  }
+
+  // Check against union type IDs
+  if (expectedTypeIds && expectedTypeIds.includes(actualTypeId)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Check if annotation's target type IDs match any of the expected type IDs
+ */
+function annotationMatchesExpectedTypes(
+  annotation: ResolvedRendersAnnotation,
+  expectedTypeId: ComponentTypeId | undefined,
+  expectedTypeIds: ComponentTypeId[] | undefined
+): boolean {
+  // Check primary target type ID
+  if (annotation.targetTypeId) {
+    if (expectedTypeId && annotation.targetTypeId === expectedTypeId) {
+      return true;
+    }
+    if (expectedTypeIds && expectedTypeIds.includes(annotation.targetTypeId)) {
+      return true;
+    }
+  }
+
+  // Check all target type IDs (for annotations with unions)
+  if (annotation.targetTypeIds) {
+    for (const targetTypeId of annotation.targetTypeIds) {
+      if (expectedTypeId && targetTypeId === expectedTypeId) {
+        return true;
+      }
+      if (expectedTypeIds && expectedTypeIds.includes(targetTypeId)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
  * Check if a component can render the expected component type using type IDs.
  * This ensures that components are actually the same type, not just the same name.
  *
+ * For union types like @renders {Header | Footer}, returning either Header OR Footer is valid.
+ *
  * Examples:
  * - Header (type ID: "/path/Header.tsx:Header") can render Header (same type ID)
  * - MyHeader @renders {Header} can render Header if annotations match
  * - CustomHeader @renders {MyHeader} can render Header through chain resolution
+ * - FlexComp @renders {Header | Footer} can return either Header or Footer
  *
  * @param actualComponent - The component name being returned/used
- * @param expectedComponent - The component name required by @renders annotation
+ * @param expectedComponent - The component name required by @renders annotation (primary)
  * @param renderMap - Map of component names to their resolved annotations
  * @param options - Type IDs for the actual and expected components
  * @param maxDepth - Maximum chain depth to prevent infinite loops (default: 10)
@@ -38,10 +101,10 @@ export function canRenderComponentTyped(
   options: TypeAwareValidationOptions = {},
   maxDepth: number = DEFAULT_MAX_DEPTH
 ): boolean {
-  const { actualTypeId, expectedTypeId } = options;
+  const { actualTypeId, expectedTypeId, expectedTypeIds } = options;
 
-  // Direct type ID match
-  if (actualTypeId && expectedTypeId && actualTypeId === expectedTypeId) {
+  // Direct type ID match (handles union types)
+  if (matchesAnyExpectedType(actualTypeId, expectedTypeId, expectedTypeIds)) {
     return true;
   }
 
@@ -51,12 +114,10 @@ export function canRenderComponentTyped(
     return false;
   }
 
-  // If the annotation has a targetTypeId and we have the expected type ID,
-  // we can do a type-safe comparison
-  if (annotation.targetTypeId && expectedTypeId) {
-    if (annotation.targetTypeId === expectedTypeId) {
-      return true;
-    }
+  // If the annotation has target type IDs and we have expected type IDs,
+  // we can do a type-safe comparison (handles union types)
+  if (annotationMatchesExpectedTypes(annotation, expectedTypeId, expectedTypeIds)) {
+    return true;
   }
 
   // Follow the chain with cycle detection
@@ -66,9 +127,9 @@ export function canRenderComponentTyped(
   let depth = 0;
 
   while (depth < maxDepth) {
-    // Type-based match check
-    if (currentAnnotation?.targetTypeId && expectedTypeId) {
-      if (currentAnnotation.targetTypeId === expectedTypeId) {
+    // Type-based match check (handles union types)
+    if (currentAnnotation) {
+      if (annotationMatchesExpectedTypes(currentAnnotation, expectedTypeId, expectedTypeIds)) {
         return true;
       }
     }

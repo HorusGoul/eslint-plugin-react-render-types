@@ -29,9 +29,12 @@ export default createRule<[], MessageIds>({
 
           const annotation = parseRendersAnnotation(text);
           if (annotation) {
+            // Mark all components in the union as used
             // Handle namespaced: "Menu.Item" -> mark "Menu"
-            const baseName = annotation.componentName.split(".")[0];
-            sourceCode.markVariableAsUsed(baseName, programNode);
+            for (const componentName of annotation.componentNames) {
+              const baseName = componentName.split(".")[0];
+              sourceCode.markVariableAsUsed(baseName, programNode);
+            }
           }
         }
       },

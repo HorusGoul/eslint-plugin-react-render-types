@@ -1,10 +1,10 @@
 import type { RendersAnnotation } from "../types/index.js";
 
 /**
- * Regex to match @renders annotation
+ * Regex to match @renders annotation with optional union types
  * Groups:
  * 1. modifier (? or * or undefined)
- * 2. component name (including namespaced like Menu.Item)
+ * 2. full type expression (component names with optional union syntax)
  *
  * Pattern explanation:
  * - (?:^|[^a-zA-Z@]) - start of string or non-letter/non-@ (prevents matching pre@renders)
@@ -13,16 +13,46 @@ import type { RendersAnnotation } from "../types/index.js";
  * - \s* - optional whitespace
  * - \{ - opening brace
  * - \s* - optional whitespace
- * - ([A-Z][a-zA-Z0-9]*(?:\.[A-Z][a-zA-Z0-9]*)*) - component name (PascalCase, optionally namespaced)
+ * - ([^}]+) - capture everything inside braces (component names, pipes, whitespace)
  * - \s* - optional whitespace
  * - \} - closing brace
  */
-const RENDERS_REGEX =
-  /(?:^|[^a-zA-Z@])@renders(\?|\*)?\s*\{\s*([A-Z][a-zA-Z0-9]*(?:\.[A-Z][a-zA-Z0-9]*)*)\s*\}/;
+const RENDERS_REGEX = /(?:^|[^a-zA-Z@])@renders(\?|\*)?\s*\{\s*([^}]+)\s*\}/;
+
+/**
+ * Regex to validate a single component name (PascalCase, optionally namespaced)
+ */
+const COMPONENT_NAME_REGEX = /^[A-Z][a-zA-Z0-9]*(?:\.[A-Z][a-zA-Z0-9]*)*$/;
+
+/**
+ * Parse union type expression into component names.
+ * Examples:
+ * - "Header" -> ["Header"]
+ * - "Header | Footer" -> ["Header", "Footer"]
+ * - "Header | Menu.Item | Footer" -> ["Header", "Menu.Item", "Footer"]
+ *
+ * Returns null if any component name is invalid.
+ */
+function parseUnionType(typeExpression: string): string[] | null {
+  const parts = typeExpression.split("|").map((part) => part.trim());
+
+  // Validate all parts are valid component names
+  for (const part of parts) {
+    if (!COMPONENT_NAME_REGEX.test(part)) {
+      return null;
+    }
+  }
+
+  return parts;
+}
 
 /**
  * Parse @renders annotation from JSDoc comment text
- * Handles: @renders {Component}, @renders? {Component}, @renders* {Component}
+ * Handles:
+ * - @renders {Component}
+ * - @renders? {Component}
+ * - @renders* {Component}
+ * - @renders {Header | Footer} (union types)
  */
 export function parseRendersAnnotation(
   comment: string
@@ -36,7 +66,13 @@ export function parseRendersAnnotation(
     return null;
   }
 
-  const [, modifierChar, componentName] = match;
+  const [, modifierChar, typeExpression] = match;
+
+  // Parse the type expression (may be a union)
+  const componentNames = parseUnionType(typeExpression);
+  if (!componentNames || componentNames.length === 0) {
+    return null;
+  }
 
   let modifier: RendersAnnotation["modifier"];
   switch (modifierChar) {
@@ -50,11 +86,16 @@ export function parseRendersAnnotation(
       modifier = "required";
   }
 
-  // Reconstruct the raw annotation string
-  const raw = `@renders${modifierChar ?? ""} {${componentName}}`;
+  // Format the raw annotation string
+  const formattedType =
+    componentNames.length === 1
+      ? componentNames[0]
+      : componentNames.join(" | ");
+  const raw = `@renders${modifierChar ?? ""} {${formattedType}}`;
 
   return {
-    componentName,
+    componentName: componentNames[0], // First component for backwards compatibility
+    componentNames,
     modifier,
     raw,
   };

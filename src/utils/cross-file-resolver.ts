@@ -332,13 +332,145 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
   }
 
   /**
-   * Resolve the type ID for a component referenced in a @renders annotation.
+   * Resolve the type ID for the primary component in a @renders annotation.
    * This looks up the component name in the current file's scope.
    */
   function resolveAnnotationTargetTypeId(
     annotation: RendersAnnotation
   ): ComponentTypeId | null {
     return getComponentTypeId(annotation.componentName);
+  }
+
+  /**
+   * Resolve type IDs for all components in a @renders union annotation.
+   * Returns an array of type IDs (some may be undefined if resolution fails).
+   */
+  function resolveAnnotationTargetTypeIds(
+    annotation: RendersAnnotation
+  ): (ComponentTypeId | undefined)[] {
+    return annotation.componentNames.map(
+      (name) => getComponentTypeId(name) ?? undefined
+    );
+  }
+
+  /**
+   * Resolve a type alias to its constituent component names.
+   * For example, `type AliasedUnion = A | B` returns ["A", "B"].
+   * Returns null if the type is not a valid component union.
+   */
+  function resolveTypeAliasToComponentNames(
+    typeName: string
+  ): string[] | null {
+    if (!currentSourceFile) {
+      return null;
+    }
+
+    // Find the symbol for this type name (type alias)
+    const symbol = typeChecker.resolveName(
+      typeName,
+      currentSourceFile,
+      ts.SymbolFlags.TypeAlias,
+      /* excludeGlobals */ false
+    );
+
+    if (!symbol) {
+      return null;
+    }
+
+    // Get the declarations to find the type alias declaration
+    const declarations = symbol.getDeclarations();
+    if (!declarations || declarations.length === 0) {
+      return null;
+    }
+
+    const declaration = declarations[0];
+    if (!ts.isTypeAliasDeclaration(declaration)) {
+      return null;
+    }
+
+    // Check if the type is a union type node
+    const typeNode = declaration.type;
+    if (!ts.isUnionTypeNode(typeNode)) {
+      return null;
+    }
+
+    const componentNames: string[] = [];
+
+    for (const memberTypeNode of typeNode.types) {
+      // Get the type reference name
+      if (ts.isTypeReferenceNode(memberTypeNode)) {
+        const memberTypeName = memberTypeNode.typeName;
+        if (ts.isIdentifier(memberTypeName)) {
+          const name = memberTypeName.text;
+
+          // Validate it's a valid component name (starts with uppercase)
+          if (!/^[A-Z]/.test(name)) {
+            return null;
+          }
+
+          componentNames.push(name);
+        } else if (ts.isQualifiedName(memberTypeName)) {
+          // Handle qualified names like Namespace.Component
+          const parts: string[] = [];
+          let current: ts.EntityName = memberTypeName;
+          while (ts.isQualifiedName(current)) {
+            parts.unshift(current.right.text);
+            current = current.left;
+          }
+          if (ts.isIdentifier(current)) {
+            parts.unshift(current.text);
+          }
+          const name = parts.join(".");
+
+          // Validate first part starts with uppercase
+          if (!/^[A-Z]/.test(parts[0])) {
+            return null;
+          }
+
+          componentNames.push(name);
+        }
+      } else {
+        // Not a type reference, can't handle
+        return null;
+      }
+    }
+
+    if (componentNames.length === 0) {
+      return null;
+    }
+
+    return componentNames;
+  }
+
+  /**
+   * Expand a @renders annotation to resolve any type aliases.
+   * If the annotation references a type alias that is a union,
+   * it expands componentNames to include all union members.
+   */
+  function expandTypeAliases(
+    annotation: RendersAnnotation
+  ): RendersAnnotation {
+    // If already a union (contains multiple components), return as-is
+    if (annotation.componentNames.length > 1) {
+      return annotation;
+    }
+
+    // Try to resolve the single component name as a type alias
+    const expandedNames = resolveTypeAliasToComponentNames(
+      annotation.componentName
+    );
+
+    if (expandedNames && expandedNames.length > 1) {
+      // It's a type alias union - expand it
+      return {
+        ...annotation,
+        componentName: expandedNames[0],
+        componentNames: expandedNames,
+      };
+    }
+
+    // Not a type alias union, return as-is
+    return annotation;
   }
 
   /**
@@ -360,10 +492,16 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
 
     // Process local components
     for (const [name, annotation] of localRenderMap) {
-      const targetTypeId = resolveAnnotationTargetTypeId(annotation);
+      // Expand type aliases (e.g., type AliasedUnion = A | B)
+      const expandedAnnotation = expandTypeAliases(annotation);
+      const targetTypeId = resolveAnnotationTargetTypeId(expandedAnnotation);
+      const targetTypeIds = resolveAnnotationTargetTypeIds(expandedAnnotation).filter(
+        (id): id is ComponentTypeId => id !== undefined
+      );
       resolvedMap.set(name, {
-        ...annotation,
+        ...expandedAnnotation,
         targetTypeId: targetTypeId ?? undefined,
+        targetTypeIds: targetTypeIds.length > 0 ? targetTypeIds : undefined,
       });
     }
 
@@ -380,10 +518,16 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
       );
 
       if (annotation) {
-        const targetTypeId = resolveAnnotationTargetTypeId(annotation);
+        // Expand type aliases (e.g., type AliasedUnion = A | B)
+        const expandedAnnotation = expandTypeAliases(annotation);
+        const targetTypeId = resolveAnnotationTargetTypeId(expandedAnnotation);
+        const targetTypeIds = resolveAnnotationTargetTypeIds(expandedAnnotation).filter(
+          (id): id is ComponentTypeId => id !== undefined
+        );
         resolvedMap.set(localName, {
-          ...annotation,
+          ...expandedAnnotation,
           targetTypeId: targetTypeId ?? undefined,
+          targetTypeIds: targetTypeIds.length > 0 ? targetTypeIds : undefined,
         });
       }
     }
@@ -394,5 +538,7 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
   return {
     getComponentTypeId,
     buildResolvedRenderMap,
+    expandTypeAliases,
+    resolveTypeAliasToComponentNames,
   };
 }

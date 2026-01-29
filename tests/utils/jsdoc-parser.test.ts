@@ -7,6 +7,7 @@ describe("parseRendersAnnotation", () => {
       const result = parseRendersAnnotation("/** @renders {Header} */");
       expect(result).toEqual({
         componentName: "Header",
+        componentNames: ["Header"],
         modifier: "required",
         raw: "@renders {Header}",
       });
@@ -21,6 +22,7 @@ describe("parseRendersAnnotation", () => {
       `);
       expect(result).toEqual({
         componentName: "Header",
+        componentNames: ["Header"],
         modifier: "required",
         raw: "@renders {Header}",
       });
@@ -30,6 +32,7 @@ describe("parseRendersAnnotation", () => {
       const result = parseRendersAnnotation("/** @renders {Menu.Item} */");
       expect(result).toEqual({
         componentName: "Menu.Item",
+        componentNames: ["Menu.Item"],
         modifier: "required",
         raw: "@renders {Menu.Item}",
       });
@@ -41,6 +44,7 @@ describe("parseRendersAnnotation", () => {
       );
       expect(result).toEqual({
         componentName: "UI.Menu.Item.Label",
+        componentNames: ["UI.Menu.Item.Label"],
         modifier: "required",
         raw: "@renders {UI.Menu.Item.Label}",
       });
@@ -52,6 +56,7 @@ describe("parseRendersAnnotation", () => {
       const result = parseRendersAnnotation("/** @renders? {Header} */");
       expect(result).toEqual({
         componentName: "Header",
+        componentNames: ["Header"],
         modifier: "optional",
         raw: "@renders? {Header}",
       });
@@ -66,6 +71,7 @@ describe("parseRendersAnnotation", () => {
       `);
       expect(result).toEqual({
         componentName: "CardHeader",
+        componentNames: ["CardHeader"],
         modifier: "optional",
         raw: "@renders? {CardHeader}",
       });
@@ -77,6 +83,7 @@ describe("parseRendersAnnotation", () => {
       const result = parseRendersAnnotation("/** @renders* {MenuItem} */");
       expect(result).toEqual({
         componentName: "MenuItem",
+        componentNames: ["MenuItem"],
         modifier: "many",
         raw: "@renders* {MenuItem}",
       });
@@ -91,8 +98,158 @@ describe("parseRendersAnnotation", () => {
       `);
       expect(result).toEqual({
         componentName: "Menu.Item",
+        componentNames: ["Menu.Item"],
         modifier: "many",
         raw: "@renders* {Menu.Item}",
+      });
+    });
+  });
+
+  describe("@renders {A | B} - union types", () => {
+    it("should parse simple union type", () => {
+      const result = parseRendersAnnotation("/** @renders {Header | Footer} */");
+      expect(result).toEqual({
+        componentName: "Header",
+        componentNames: ["Header", "Footer"],
+        modifier: "required",
+        raw: "@renders {Header | Footer}",
+      });
+    });
+
+    it("should parse union type with three components", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders {Header | Sidebar | Footer} */"
+      );
+      expect(result).toEqual({
+        componentName: "Header",
+        componentNames: ["Header", "Sidebar", "Footer"],
+        modifier: "required",
+        raw: "@renders {Header | Sidebar | Footer}",
+      });
+    });
+
+    it("should parse union type with namespaced components", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders {Menu.Header | Menu.Footer} */"
+      );
+      expect(result).toEqual({
+        componentName: "Menu.Header",
+        componentNames: ["Menu.Header", "Menu.Footer"],
+        modifier: "required",
+        raw: "@renders {Menu.Header | Menu.Footer}",
+      });
+    });
+
+    it("should parse optional union type", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders? {Header | Footer} */"
+      );
+      expect(result).toEqual({
+        componentName: "Header",
+        componentNames: ["Header", "Footer"],
+        modifier: "optional",
+        raw: "@renders? {Header | Footer}",
+      });
+    });
+
+    it("should parse many union type", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders* {MenuItem | Divider} */"
+      );
+      expect(result).toEqual({
+        componentName: "MenuItem",
+        componentNames: ["MenuItem", "Divider"],
+        modifier: "many",
+        raw: "@renders* {MenuItem | Divider}",
+      });
+    });
+
+    it("should handle whitespace variations in union", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders {Header|Footer} */"
+      );
+      expect(result?.componentNames).toEqual(["Header", "Footer"]);
+    });
+
+    it("should handle extra whitespace in union", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders {Header  |  Footer} */"
+      );
+      expect(result?.componentNames).toEqual(["Header", "Footer"]);
+    });
+
+    it("should parse union type in multiline JSDoc", () => {
+      const result = parseRendersAnnotation(`
+        /**
+         * Can render either header or footer
+         * @renders {Header | Footer}
+         */
+      `);
+      expect(result).toEqual({
+        componentName: "Header",
+        componentNames: ["Header", "Footer"],
+        modifier: "required",
+        raw: "@renders {Header | Footer}",
+      });
+    });
+
+    it("should parse union type with five components", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders {Header | Sidebar | Content | Footer | Navigation} */"
+      );
+      expect(result).toEqual({
+        componentName: "Header",
+        componentNames: ["Header", "Sidebar", "Content", "Footer", "Navigation"],
+        modifier: "required",
+        raw: "@renders {Header | Sidebar | Content | Footer | Navigation}",
+      });
+    });
+
+    it("should parse large union type with seven components", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders {A | B | C | D | E | F | G} */"
+      );
+      expect(result).toEqual({
+        componentName: "A",
+        componentNames: ["A", "B", "C", "D", "E", "F", "G"],
+        modifier: "required",
+        raw: "@renders {A | B | C | D | E | F | G}",
+      });
+    });
+
+    it("should parse large union with mixed namespaced components", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders {UI.Header | UI.Footer | Card | Button | UI.Sidebar} */"
+      );
+      expect(result).toEqual({
+        componentName: "UI.Header",
+        componentNames: ["UI.Header", "UI.Footer", "Card", "Button", "UI.Sidebar"],
+        modifier: "required",
+        raw: "@renders {UI.Header | UI.Footer | Card | Button | UI.Sidebar}",
+      });
+    });
+
+    it("should parse optional large union type", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders? {Header | Sidebar | Content | Footer} */"
+      );
+      expect(result).toEqual({
+        componentName: "Header",
+        componentNames: ["Header", "Sidebar", "Content", "Footer"],
+        modifier: "optional",
+        raw: "@renders? {Header | Sidebar | Content | Footer}",
+      });
+    });
+
+    it("should parse many modifier with large union type", () => {
+      const result = parseRendersAnnotation(
+        "/** @renders* {MenuItem | Divider | SubMenu | MenuGroup} */"
+      );
+      expect(result).toEqual({
+        componentName: "MenuItem",
+        componentNames: ["MenuItem", "Divider", "SubMenu", "MenuGroup"],
+        modifier: "many",
+        raw: "@renders* {MenuItem | Divider | SubMenu | MenuGroup}",
       });
     });
   });
@@ -165,6 +322,16 @@ describe("parseRendersAnnotation", () => {
  */`);
       expect(result?.componentName).toBe("Header");
     });
+
+    it("should return null for invalid component names in union", () => {
+      const result = parseRendersAnnotation("/** @renders {header | footer} */");
+      expect(result).toBeNull();
+    });
+
+    it("should return null for union with lowercase component", () => {
+      const result = parseRendersAnnotation("/** @renders {Header | footer} */");
+      expect(result).toBeNull();
+    });
   });
 
   describe("with other JSDoc tags", () => {
@@ -179,6 +346,7 @@ describe("parseRendersAnnotation", () => {
       `);
       expect(result).toEqual({
         componentName: "Header",
+        componentNames: ["Header"],
         modifier: "required",
         raw: "@renders {Header}",
       });
@@ -193,8 +361,25 @@ describe("parseRendersAnnotation", () => {
       `);
       expect(result).toEqual({
         componentName: "Header",
+        componentNames: ["Header"],
         modifier: "optional",
         raw: "@renders? {Header}",
+      });
+    });
+
+    it("should parse union type among other tags", () => {
+      const result = parseRendersAnnotation(`
+        /**
+         * A flexible component
+         * @param {string} variant - The variant
+         * @renders {Header | Footer}
+         */
+      `);
+      expect(result).toEqual({
+        componentName: "Header",
+        componentNames: ["Header", "Footer"],
+        modifier: "required",
+        raw: "@renders {Header | Footer}",
       });
     });
   });
