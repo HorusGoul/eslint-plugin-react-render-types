@@ -17,7 +17,7 @@ import type { RendersAnnotation } from "../types/index.js";
  * - \s* - optional whitespace
  * - \} - closing brace
  */
-const RENDERS_REGEX = /(?:^|[^a-zA-Z@])@renders(\?|\*)?\s*\{\s*([^}]+)\s*\}/;
+const RENDERS_REGEX = /(?:^|[^a-zA-Z@])@renders(\?|\*)?(!)?\s*\{\s*([^}]+)\s*\}/;
 
 /**
  * Regex to validate a single component name (PascalCase, optionally namespaced)
@@ -82,7 +82,7 @@ export function parseRendersAnnotation(
     return null;
   }
 
-  const [, modifierChar, typeExpression] = match;
+  const [, modifierChar, uncheckedChar, typeExpression] = match;
 
   // Parse the type expression (may be a union)
   const componentNames = parseUnionType(typeExpression);
@@ -107,12 +107,18 @@ export function parseRendersAnnotation(
     componentNames.length === 1
       ? componentNames[0]
       : componentNames.join(" | ");
-  const raw = `@renders${modifierChar ?? ""} {${formattedType}}`;
+  const raw = `@renders${modifierChar ?? ""}${uncheckedChar ?? ""} {${formattedType}}`;
 
-  return {
+  const result: RendersAnnotation = {
     componentName: componentNames[0], // First component for backwards compatibility
     componentNames,
     modifier,
     raw,
   };
+
+  if (uncheckedChar === "!") {
+    result.unchecked = true;
+  }
+
+  return result;
 }

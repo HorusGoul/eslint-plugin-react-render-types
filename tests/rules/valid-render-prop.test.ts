@@ -289,6 +289,57 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // Logical AND expression in children
+    {
+      name: "logical AND expression in children",
+      code: withComponents(
+        `
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        declare const show: boolean;
+        <Tabs>{show && <Tab />}</Tabs>;
+      `,
+        ["Tab", "Tabs"]
+      ),
+      filename: "test.tsx",
+    },
+    // Ternary expression in prop
+    {
+      name: "ternary expression in prop",
+      code: withComponents(
+        `
+        interface LayoutProps {
+          /** @renders {Header | Footer} */
+          slot: React.ReactNode;
+        }
+
+        declare const isTop: boolean;
+        <Layout slot={isTop ? <Header /> : <Footer />} />;
+      `,
+        ["Header", "Footer", "Layout"]
+      ),
+      filename: "test.tsx",
+    },
+    // .map() expression in children
+    {
+      name: "map expression in children",
+      code: withComponents(
+        `
+        interface MenuProps {
+          /** @renders {MenuItem} */
+          children: React.ReactNode;
+        }
+
+        declare const items: string[];
+        <Menu>{items.map(item => <MenuItem key={item} />)}</Menu>;
+      `,
+        ["MenuItem", "Menu"]
+      ),
+      filename: "test.tsx",
+    },
   ],
   invalid: [
     // Wrong component passed to prop
@@ -513,6 +564,59 @@ ruleTester.run("valid-render-prop", rule, {
           data: {
             expected: "Tab",
             actual: "Button",
+          },
+        },
+      ],
+    },
+    // Logical AND with wrong component in children
+    {
+      name: "logical AND with wrong component in children",
+      code: withComponents(
+        `
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        declare const show: boolean;
+        <Tabs>{show && <Button />}</Tabs>;
+      `,
+        ["Tab", "Button", "Tabs"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "Tab",
+            actual: "Button",
+          },
+        },
+      ],
+    },
+    // Ternary with wrong component in prop
+    {
+      name: "ternary with wrong component in prop",
+      code: withComponents(
+        `
+        interface CardProps {
+          /** @renders {CardHeader} */
+          header: React.ReactNode;
+        }
+
+        declare const cond: boolean;
+        <Card header={cond ? <Footer /> : <CardHeader />} />;
+      `,
+        ["CardHeader", "Footer", "Card"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "header",
+            expected: "CardHeader",
+            actual: "Footer",
           },
         },
       ],

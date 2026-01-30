@@ -3,6 +3,7 @@ import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation, parseTransparentAnnotation } from "../utils/jsdoc-parser.js";
 import { getJSXElementName, isComponentName } from "../utils/component-utils.js";
+import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx-extraction.js";
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import type { RendersAnnotation, ResolvedRenderMap } from "../types/index.js";
@@ -150,67 +151,6 @@ export default createRule<[], MessageIds>({
     }
 
     /**
-     * Get JSX element name from expression
-     */
-    function getJSXNameFromExpression(
-      expr: TSESTree.Expression | TSESTree.JSXEmptyExpression
-    ): string | null {
-      if (expr.type === "JSXElement") {
-        return getJSXElementName(expr);
-      }
-
-      if (expr.type === "Literal" && expr.value === null) {
-        return "null";
-      }
-
-      if (expr.type === "Identifier" && expr.name === "undefined") {
-        return "undefined";
-      }
-
-      return null;
-    }
-
-    /**
-     * Recursively extract child JSX element names from a transparent wrapper.
-     * Looks through nested transparent wrappers to find the actual components.
-     */
-    function extractChildElementNames(
-      jsxElement: TSESTree.JSXElement,
-      visited: Set<string> = new Set(),
-      maxDepth: number = 10
-    ): string[] {
-      if (maxDepth <= 0) return [];
-
-      const elementName = getJSXElementName(jsxElement);
-      if (elementName) {
-        if (visited.has(elementName)) return []; // cycle detection
-        visited.add(elementName);
-      }
-
-      const results: string[] = [];
-
-      for (const child of jsxElement.children) {
-        if (child.type === "JSXElement") {
-          const childName = getJSXElementName(child);
-          if (childName && transparentComponents.has(childName)) {
-            // Nested transparent wrapper — recurse
-            results.push(
-              ...extractChildElementNames(
-                child,
-                new Set(visited),
-                maxDepth - 1
-              )
-            );
-          } else if (childName) {
-            results.push(childName);
-          }
-        }
-      }
-
-      return results;
-    }
-
-    /**
      * Collect @renders and @transparent annotations from function components
      */
     function collectComponentAnnotation(node: FunctionNode): void {
@@ -306,27 +246,24 @@ export default createRule<[], MessageIds>({
 
       // Get the value being passed to the prop
       let passedValues: string[] = [];
-      let valueNode: TSESTree.Node = attr.value;
+      const valueNode: TSESTree.Node = attr.value;
 
       if (attr.value.type === "JSXExpressionContainer") {
         const expr = attr.value.expression;
         if (expr.type === "JSXElement") {
           const name = getJSXElementName(expr);
           if (name && transparentComponents.has(name)) {
-            passedValues = extractChildElementNames(expr);
+            passedValues = extractChildElementNames(expr, transparentComponents);
           } else if (name) {
             passedValues = [name];
           }
-        } else {
-          const name = getJSXNameFromExpression(expr);
-          if (name) {
-            passedValues = [name];
-          }
+        } else if (expr.type !== "JSXEmptyExpression") {
+          passedValues = extractJSXFromExpression(expr);
         }
       } else if (attr.value.type === "JSXElement") {
         const name = getJSXElementName(attr.value);
         if (name && transparentComponents.has(name)) {
-          passedValues = extractChildElementNames(attr.value);
+          passedValues = extractChildElementNames(attr.value, transparentComponents);
         } else if (name) {
           passedValues = [name];
         }
@@ -393,51 +330,30 @@ export default createRule<[], MessageIds>({
 
       // Validate each child
       for (const child of node.children) {
+        let extractedNames: string[] = [];
+
         if (child.type === "JSXElement") {
           const childName = getJSXElementName(child);
           if (childName && transparentComponents.has(childName)) {
-            // Look through transparent wrapper
-            const extractedNames = extractChildElementNames(child);
-            for (const name of extractedNames) {
-              const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
-              if (!isValidValue(name, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
-                context.report({
-                  node: child,
-                  messageId: "invalidRenderChildren",
-                  data: {
-                    expected: formatExpected(annotation),
-                    actual: name,
-                  },
-                });
-              }
-            }
+            extractedNames = extractChildElementNames(child, transparentComponents);
           } else if (childName) {
-            const actualTypeId = crossFileResolver.getComponentTypeId(childName) ?? undefined;
-            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
-              context.report({
-                node: child,
-                messageId: "invalidRenderChildren",
-                data: {
-                  expected: formatExpected(annotation),
-                  actual: childName,
-                },
-              });
-            }
+            extractedNames = [childName];
           }
-        } else if (child.type === "JSXExpressionContainer") {
-          const childName = getJSXNameFromExpression(child.expression);
-          if (childName) {
-            const actualTypeId = crossFileResolver.getComponentTypeId(childName) ?? undefined;
-            if (!isValidValue(childName, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
-              context.report({
-                node: child,
-                messageId: "invalidRenderChildren",
-                data: {
-                  expected: formatExpected(annotation),
-                  actual: childName,
-                },
-              });
-            }
+        } else if (child.type === "JSXExpressionContainer" && child.expression.type !== "JSXEmptyExpression") {
+          extractedNames = extractJSXFromExpression(child.expression);
+        }
+
+        for (const name of extractedNames) {
+          const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
+          if (!isValidValue(name, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
+            context.report({
+              node: child,
+              messageId: "invalidRenderChildren",
+              data: {
+                expected: formatExpected(annotation),
+                actual: name,
+              },
+            });
           }
         }
       }

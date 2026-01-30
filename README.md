@@ -479,10 +479,57 @@ function MyHeader() {
 }
 ```
 
-### Limitations
+### Expression Children
 
-- Expression children (like `{items.map(...)}`) inside transparent wrappers are not analyzed
-- Cannot combine `@transparent` with `@renders` on the same component
+The plugin can analyze expressions inside transparent wrappers (and in general):
+
+```tsx
+/** @transparent */
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return <div>{children}</div>;
+}
+
+/** @renders? {Header} */
+function ConditionalHeader({ show }: { show: boolean }) {
+  return <Wrapper>{show && <Header />}</Wrapper>;  // ✓ Valid
+}
+
+/** @renders {Header | Footer} */
+function FlexComponent({ isHeader }: { isHeader: boolean }) {
+  return isHeader ? <Header /> : <Footer />;  // ✓ Valid
+}
+
+/** @renders* {MenuItem} */
+function MenuItems({ items }: { items: string[] }) {
+  return <>{items.map(item => <MenuItem key={item} />)}</>;  // ✓ Valid
+}
+```
+
+Supported expression patterns:
+- Logical AND: `{condition && <Component />}`
+- Ternary: `{condition ? <A /> : <B />}`
+- `.map()` / `.flatMap()` callbacks: `{items.map(item => <Component />)}`
+
+## Unchecked Annotations (`@renders!`)
+
+When the plugin can't statically analyze a component's return value (e.g., component registries, dynamic rendering), use `!` to skip return validation while still declaring the render type:
+
+```tsx
+/** @renders! {Header} */
+function DynamicHeader({ type }: { type: string }) {
+  return componentRegistry[type];  // Plugin can't analyze this — no error
+}
+
+/** @renders {Header} */
+function MyHeader() {
+  return <DynamicHeader type="main" />;  // ✓ Valid — DynamicHeader declares it renders Header
+}
+```
+
+`!` combines with existing modifiers:
+- `@renders! {X}` — required, unchecked
+- `@renders?! {X}` — optional, unchecked
+- `@renders*! {X}` — many, unchecked
 
 ## Supported Patterns
 
@@ -671,6 +718,8 @@ This rule works similarly to `eslint-plugin-react`'s `jsx-uses-vars` rule.
 | Union types | ✓ (language feature) | `@renders {A \| B}` |
 | Type alias unions | ✓ (language feature) | `@renders {MyAlias}` (resolves `type MyAlias = A \| B`) |
 | Transparent components | ✓ (`renders T`) | `@transparent` |
+| Unchecked (escape hatch) | — | `@renders! {X}` |
+| Expression analysis | ✓ | ✓ (ternary, `&&`, `.map()`) |
 | Chained rendering | ✓ | ✓ |
 | Props validation | ✓ | ✓ |
 | Children validation | ✓ | ✓ |

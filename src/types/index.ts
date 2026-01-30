@@ -16,6 +16,8 @@ export interface RendersAnnotation {
   modifier: "required" | "optional" | "many";
   /** The raw annotation text */
   raw: string;
+  /** If true, return validation is skipped (from @renders! syntax) */
+  unchecked?: boolean;
 }
 
 /**

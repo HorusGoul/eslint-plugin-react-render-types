@@ -3,6 +3,7 @@ import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation, parseTransparentAnnotation } from "../utils/jsdoc-parser.js";
 import { getJSXElementName, isComponentName } from "../utils/component-utils.js";
+import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx-extraction.js";
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import type { RendersAnnotation, ResolvedRenderMap } from "../types/index.js";
@@ -99,48 +100,9 @@ export default createRule<[], MessageIds>({
     }
 
     /**
-     * Recursively extract child JSX element names from a transparent wrapper.
-     * Looks through nested transparent wrappers to find the actual components.
-     */
-    function extractChildElementNames(
-      jsxElement: TSESTree.JSXElement,
-      visited: Set<string> = new Set(),
-      maxDepth: number = 10
-    ): string[] {
-      if (maxDepth <= 0) return [];
-
-      const elementName = getJSXElementName(jsxElement);
-      if (elementName) {
-        if (visited.has(elementName)) return []; // cycle detection
-        visited.add(elementName);
-      }
-
-      const results: string[] = [];
-
-      for (const child of jsxElement.children) {
-        if (child.type === "JSXElement") {
-          const childName = getJSXElementName(child);
-          if (childName && transparentComponents.has(childName)) {
-            // Nested transparent wrapper — recurse
-            results.push(
-              ...extractChildElementNames(
-                child,
-                new Set(visited),
-                maxDepth - 1
-              )
-            );
-          } else if (childName) {
-            results.push(childName);
-          }
-        }
-      }
-
-      return results;
-    }
-
-    /**
      * Get the returned JSX element names from a return statement or expression.
-     * Returns an array because transparent wrappers may contain multiple children.
+     * Returns an array because transparent wrappers may contain multiple children,
+     * and expressions (ternaries, &&, .map) may yield multiple components.
      */
     function getReturnedElementNames(
       node: TSESTree.ReturnStatement | TSESTree.Expression
@@ -157,27 +119,13 @@ export default createRule<[], MessageIds>({
         const name = getJSXElementName(expr);
         if (name && transparentComponents.has(name)) {
           // Look through transparent wrapper
-          return extractChildElementNames(expr);
+          return extractChildElementNames(expr, transparentComponents);
         }
         return name ? [name] : [];
       }
 
-      // JSX fragment: return <>...</>
-      if (expr.type === "JSXFragment") {
-        return ["Fragment"];
-      }
-
-      // Literal null: return null;
-      if (expr.type === "Literal" && expr.value === null) {
-        return ["null"];
-      }
-
-      // Identifier undefined: return undefined;
-      if (expr.type === "Identifier" && expr.name === "undefined") {
-        return ["undefined"];
-      }
-
-      return [];
+      // For all other expressions (ternary, &&, .map, fragments, null, etc.)
+      return extractJSXFromExpression(expr);
     }
 
     /**
@@ -334,6 +282,11 @@ export default createRule<[], MessageIds>({
       const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
 
       for (const { node, annotation, componentName } of functionsToValidate) {
+        // Skip return validation for @renders! (unchecked)
+        if (annotation.unchecked) {
+          continue;
+        }
+
         // Use the expanded annotation from the resolved render map (handles type alias expansion)
         const expandedAnnotation = resolvedRenderMap.get(componentName) ?? annotation;
 
