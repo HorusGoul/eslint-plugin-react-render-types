@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRendersAnnotation } from "../../src/utils/jsdoc-parser.js";
+import { parseRendersAnnotation, parseTransparentAnnotation } from "../../src/utils/jsdoc-parser.js";
 
 describe("parseRendersAnnotation", () => {
   describe("@renders {Component} - required", () => {
@@ -382,5 +382,58 @@ describe("parseRendersAnnotation", () => {
         raw: "@renders {Header | Footer}",
       });
     });
+  });
+});
+
+describe("parseTransparentAnnotation", () => {
+  it("should detect @transparent in block comment", () => {
+    expect(parseTransparentAnnotation("/** @transparent */")).toBe(true);
+  });
+
+  it("should detect @transparent in multiline block comment", () => {
+    expect(
+      parseTransparentAnnotation(`
+        /**
+         * A wrapper component
+         * @transparent
+         */
+      `)
+    ).toBe(true);
+  });
+
+  it("should return false when @transparent is absent", () => {
+    expect(parseTransparentAnnotation("/** @renders {Header} */")).toBe(false);
+  });
+
+  it("should return false for empty string", () => {
+    expect(parseTransparentAnnotation("")).toBe(false);
+  });
+
+  it("should return false for empty comment", () => {
+    expect(parseTransparentAnnotation("/** */")).toBe(false);
+  });
+
+  it("should not match @transparent in middle of word", () => {
+    expect(parseTransparentAnnotation("/** pre@transparent */")).toBe(false);
+  });
+
+  it("should not match @transparently", () => {
+    // \b boundary ensures we match the full word
+    expect(parseTransparentAnnotation("/** @transparently */")).toBe(false);
+  });
+
+  it("should detect @transparent alongside @renders", () => {
+    const comment = `
+      /**
+       * @transparent
+       * @renders {Header}
+       */
+    `;
+    expect(parseTransparentAnnotation(comment)).toBe(true);
+    expect(parseRendersAnnotation(comment)).not.toBeNull();
+  });
+
+  it("should detect @transparent in line comment", () => {
+    expect(parseTransparentAnnotation("@transparent")).toBe(true);
   });
 });
