@@ -278,6 +278,78 @@ interface MenuProps {
 
 The plugin resolves the type alias at lint time using TypeScript's type checker, expanding it to the underlying union members for validation.
 
+### `@transparent` - Transparent Components
+
+Transparent components are wrappers that don't affect render type validation. Mark a component as transparent so the plugin "looks through" it to validate the actual children being rendered.
+
+```tsx
+/** @transparent */
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return <div className="wrapper">{children}</div>;
+}
+
+/** @renders {Header} */
+function MyHeader() {
+  return (
+    <Wrapper>
+      <Header />  {/* ✓ Valid - plugin looks through Wrapper */}
+    </Wrapper>
+  );
+}
+
+/** @renders {Header} */
+function BadHeader() {
+  return (
+    <Wrapper>
+      <Footer />  {/* ✗ Error: Expected Header, got Footer */}
+    </Wrapper>
+  );
+}
+```
+
+Transparent components can be nested:
+
+```tsx
+/** @transparent */
+function OuterWrapper({ children }: { children: React.ReactNode }) {
+  return <div className="outer">{children}</div>;
+}
+
+/** @transparent */
+function InnerWrapper({ children }: { children: React.ReactNode }) {
+  return <span className="inner">{children}</span>;
+}
+
+/** @renders {Header} */
+function MyHeader() {
+  return (
+    <OuterWrapper>
+      <InnerWrapper>
+        <Header />  {/* ✓ Valid - looks through both wrappers */}
+      </InnerWrapper>
+    </OuterWrapper>
+  );
+}
+```
+
+Transparent wrappers also work with props validation:
+
+```tsx
+/** @transparent */
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return <div>{children}</div>;
+}
+
+interface TabsProps {
+  /** @renders {Tab} */
+  children: React.ReactNode;
+}
+
+<Tabs>
+  <Wrapper><Tab /></Wrapper>  {/* ✓ Valid */}
+</Tabs>
+```
+
 ## Chained Rendering
 
 Components can satisfy render types through other components that themselves have `@renders` annotations:
@@ -355,6 +427,62 @@ function Layout({ header, footer }: LayoutProps) {
   header={<div>Oops</div>} // ✗ Error: Expected Header, got div
 />
 ```
+
+## Transparent Components
+
+Transparent components are wrappers that don't affect render type validation. Mark them with the `@transparent` JSDoc tag so the plugin "looks through" the wrapper to find the actual component being rendered.
+
+```tsx
+/**
+ * @transparent
+ */
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return <div className="wrapper">{children}</div>;
+}
+
+/** @renders {Header} */
+function MyHeader() {
+  return (
+    <Wrapper>
+      <Header />  {/* ✓ Valid - plugin looks through Wrapper */}
+    </Wrapper>
+  );
+}
+```
+
+Without `@transparent`, the plugin would see `Wrapper` being returned and report an error because `Wrapper` is not `Header`.
+
+### Nested Transparent Wrappers
+
+Transparent wrappers can be nested:
+
+```tsx
+/** @transparent */
+function OuterWrapper({ children }: { children: React.ReactNode }) {
+  return <div className="outer">{children}</div>;
+}
+
+/** @transparent */
+function InnerWrapper({ children }: { children: React.ReactNode }) {
+  return <span className="inner">{children}</span>;
+}
+
+/** @renders {Header} */
+function MyHeader() {
+  return (
+    <OuterWrapper>
+      <InnerWrapper>
+        <Header />  {/* ✓ Valid */}
+      </InnerWrapper>
+    </OuterWrapper>
+  );
+}
+```
+
+### Limitations
+
+- Expression children (like `{items.map(...)}`) inside transparent wrappers are not analyzed
+- Cannot combine `@transparent` with `@renders` on the same component
 
 ## Supported Patterns
 
@@ -542,6 +670,7 @@ This rule works similarly to `eslint-plugin-react`'s `jsx-uses-vars` rule.
 | Many | `renders* Header` | `@renders* {Header}` |
 | Union types | ✓ (language feature) | `@renders {A \| B}` |
 | Type alias unions | ✓ (language feature) | `@renders {MyAlias}` (resolves `type MyAlias = A \| B`) |
+| Transparent components | ✓ (`renders T`) | `@transparent` |
 | Chained rendering | ✓ | ✓ |
 | Props validation | ✓ | ✓ |
 | Children validation | ✓ | ✓ |

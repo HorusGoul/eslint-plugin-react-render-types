@@ -54,6 +54,22 @@ function parseUnionType(typeExpression: string): string[] | null {
  * - @renders* {Component}
  * - @renders {Header | Footer} (union types)
  */
+/**
+ * Regex to match @transparent annotation
+ * Matches @transparent as a standalone tag (not part of another word)
+ */
+const TRANSPARENT_REGEX = /(?:^|[^a-zA-Z@])@transparent\b/;
+
+/**
+ * Check if a comment contains the @transparent annotation
+ */
+export function parseTransparentAnnotation(comment: string): boolean {
+  if (!comment) {
+    return false;
+  }
+  return TRANSPARENT_REGEX.test(comment);
+}
+
 export function parseRendersAnnotation(
   comment: string
 ): RendersAnnotation | null {

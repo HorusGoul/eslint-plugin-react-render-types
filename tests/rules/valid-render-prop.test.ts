@@ -214,6 +214,50 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // Transparent wrapper passed as prop value
+    {
+      name: "transparent wrapper as prop value",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface MenuProps {
+          /** @renders {MenuItem} */
+          item: React.ReactNode;
+        }
+
+        <Menu item={<Wrapper><MenuItem /></Wrapper>} />;
+      `,
+        ["MenuItem", "Menu"]
+      ),
+      filename: "test.tsx",
+    },
+    // Transparent wrapper as children
+    {
+      name: "transparent wrapper as children",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        <Tabs>
+          <Wrapper><Tab /></Wrapper>
+        </Tabs>;
+      `,
+        ["Tab", "Tabs"]
+      ),
+      filename: "test.tsx",
+    },
     // No annotation - should be ignored
     {
       name: "prop without annotation is ignored",
@@ -406,6 +450,69 @@ ruleTester.run("valid-render-prop", rule, {
             propName: "header",
             expected: "CardHeader",
             actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Transparent wrapper with wrong component as prop
+    {
+      name: "transparent wrapper with wrong component as prop",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface MenuProps {
+          /** @renders {MenuItem} */
+          item: React.ReactNode;
+        }
+
+        <Menu item={<Wrapper><Footer /></Wrapper>} />;
+      `,
+        ["MenuItem", "Footer", "Menu"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "item",
+            expected: "MenuItem",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Transparent wrapper with wrong component as children
+    {
+      name: "transparent wrapper with wrong component as children",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        <Tabs>
+          <Wrapper><Button /></Wrapper>
+        </Tabs>;
+      `,
+        ["Tab", "Button", "Tabs"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "Tab",
+            actual: "Button",
           },
         },
       ],

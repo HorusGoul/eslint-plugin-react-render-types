@@ -483,6 +483,117 @@ ruleTester.run("valid-render-return", rule, {
       ),
       filename: "test.tsx",
     },
+    // Transparent wrapper around correct component
+    {
+      name: "transparent wrapper around correct component",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Wrapper><Header /></Wrapper>;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Nested transparent wrappers
+    {
+      name: "nested transparent wrappers",
+      code: withComponents(
+        `
+        /** @transparent */
+        function OuterWrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @transparent */
+        function InnerWrapper({ children }: { children: React.ReactNode }) {
+          return <span>{children}</span>;
+        }
+
+        /** @renders {Header} */
+        function MyHeader() {
+          return (
+            <OuterWrapper>
+              <InnerWrapper>
+                <Header />
+              </InnerWrapper>
+            </OuterWrapper>
+          );
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Transparent wrapper with union type annotation
+    {
+      name: "transparent wrapper with union type",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header | Footer} */
+        function FlexComponent() {
+          return <Wrapper><Header /></Wrapper>;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Transparent wrapper with optional modifier
+    {
+      name: "transparent wrapper with optional modifier and valid return",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders? {Header} */
+        function MaybeHeader() {
+          return <Wrapper><Header /></Wrapper>;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Transparent wrapper with chained rendering
+    {
+      name: "transparent wrapper with chained rendering",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header} */
+        function BaseHeader() {
+          return <Header />;
+        }
+
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Wrapper><BaseHeader /></Wrapper>;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
   ],
   invalid: [
     // Wrong component returned
@@ -880,6 +991,62 @@ ruleTester.run("valid-render-return", rule, {
           data: {
             expected: "Header | Sidebar | Content | Footer | Navigation",
             actual: "Button",
+          },
+        },
+      ],
+    },
+    // Transparent wrapper with wrong component
+    {
+      name: "transparent wrapper with wrong component",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Wrapper><Footer /></Wrapper>;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Transparent wrapper with primitive element
+    {
+      name: "transparent wrapper with primitive element",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Wrapper><div>Not a Header</div></Wrapper>;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "div",
           },
         },
       ],

@@ -1,7 +1,7 @@
 import type { TSESTree } from "@typescript-eslint/utils";
 import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
-import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
+import { parseRendersAnnotation, parseTransparentAnnotation } from "../utils/jsdoc-parser.js";
 import { getJSXElementName, isComponentName } from "../utils/component-utils.js";
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
@@ -42,6 +42,9 @@ export default createRule<[], MessageIds>({
       annotation: RendersAnnotation;
       componentName: string;
     }> = [];
+
+    // Track components marked as @transparent
+    const transparentComponents = new Set<string>();
 
     // Get typed parser services (required for this rule)
     const parserServices = ESLintUtils.getParserServices(context);
@@ -96,39 +99,85 @@ export default createRule<[], MessageIds>({
     }
 
     /**
-     * Get the returned JSX element name from a return statement or expression
+     * Recursively extract child JSX element names from a transparent wrapper.
+     * Looks through nested transparent wrappers to find the actual components.
      */
-    function getReturnedElementName(
+    function extractChildElementNames(
+      jsxElement: TSESTree.JSXElement,
+      visited: Set<string> = new Set(),
+      maxDepth: number = 10
+    ): string[] {
+      if (maxDepth <= 0) return [];
+
+      const elementName = getJSXElementName(jsxElement);
+      if (elementName) {
+        if (visited.has(elementName)) return []; // cycle detection
+        visited.add(elementName);
+      }
+
+      const results: string[] = [];
+
+      for (const child of jsxElement.children) {
+        if (child.type === "JSXElement") {
+          const childName = getJSXElementName(child);
+          if (childName && transparentComponents.has(childName)) {
+            // Nested transparent wrapper — recurse
+            results.push(
+              ...extractChildElementNames(
+                child,
+                new Set(visited),
+                maxDepth - 1
+              )
+            );
+          } else if (childName) {
+            results.push(childName);
+          }
+        }
+      }
+
+      return results;
+    }
+
+    /**
+     * Get the returned JSX element names from a return statement or expression.
+     * Returns an array because transparent wrappers may contain multiple children.
+     */
+    function getReturnedElementNames(
       node: TSESTree.ReturnStatement | TSESTree.Expression
-    ): string | null {
+    ): string[] {
       const expr = node.type === "ReturnStatement" ? node.argument : node;
 
       // Empty return or return;
       if (!expr) {
-        return "null";
+        return ["null"];
       }
 
-      // Direct JSX element: return <Header />
+      // Direct JSX element: return <Header /> or return <Wrapper><Header /></Wrapper>
       if (expr.type === "JSXElement") {
-        return getJSXElementName(expr);
+        const name = getJSXElementName(expr);
+        if (name && transparentComponents.has(name)) {
+          // Look through transparent wrapper
+          return extractChildElementNames(expr);
+        }
+        return name ? [name] : [];
       }
 
       // JSX fragment: return <>...</>
       if (expr.type === "JSXFragment") {
-        return "Fragment";
+        return ["Fragment"];
       }
 
       // Literal null: return null;
       if (expr.type === "Literal" && expr.value === null) {
-        return "null";
+        return ["null"];
       }
 
       // Identifier undefined: return undefined;
       if (expr.type === "Identifier" && expr.name === "undefined") {
-        return "undefined";
+        return ["undefined"];
       }
 
-      return null;
+      return [];
     }
 
     /**
@@ -136,12 +185,12 @@ export default createRule<[], MessageIds>({
      */
     function collectReturns(
       node: TSESTree.Node,
-      results: Array<{ name: string; node: TSESTree.Node }>
+      results: Array<{ names: string[]; node: TSESTree.Node }>
     ): void {
       if (node.type === "ReturnStatement") {
-        const name = getReturnedElementName(node);
-        if (name !== null) {
-          results.push({ name, node });
+        const names = getReturnedElementNames(node);
+        if (names.length > 0) {
+          results.push({ names, node });
         }
         return;
       }
@@ -175,15 +224,44 @@ export default createRule<[], MessageIds>({
     }
 
     /**
+     * Check if a function node has a @transparent annotation
+     */
+    function hasTransparentAnnotation(node: FunctionNode): boolean {
+      const nodeToCheck =
+        node.parent?.type === "VariableDeclarator" &&
+        node.parent.parent?.type === "VariableDeclaration"
+          ? node.parent.parent
+          : node;
+
+      const comments = sourceCode.getCommentsBefore(nodeToCheck);
+
+      for (const comment of comments) {
+        const text =
+          comment.type === "Block" ? `/*${comment.value}*/` : comment.value;
+        if (parseTransparentAnnotation(text)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    /**
      * First pass: collect component annotations
      */
     function collectAnnotation(node: FunctionNode): void {
+      const componentName = getComponentName(node);
+
+      // Check for @transparent annotation
+      if (componentName && isComponentName(componentName) && hasTransparentAnnotation(node)) {
+        transparentComponents.add(componentName);
+      }
+
       const annotation = getRendersAnnotation(node);
       if (!annotation) {
         return;
       }
 
-      const componentName = getComponentName(node);
       if (componentName && isComponentName(componentName)) {
         // Add to local render map for chain resolution
         localRenderMap.set(componentName, annotation);
@@ -266,16 +344,16 @@ export default createRule<[], MessageIds>({
           .filter((id): id is string => id !== null);
 
         // Collect all return statements/expressions
-        const returnedNames: Array<{ name: string; node: TSESTree.Node }> = [];
+        const returnedItems: Array<{ names: string[]; node: TSESTree.Node }> = [];
 
         // Handle arrow function with implicit return
         if (
           node.type === "ArrowFunctionExpression" &&
           node.body.type !== "BlockStatement"
         ) {
-          const name = getReturnedElementName(node.body);
-          if (name !== null) {
-            returnedNames.push({ name, node: node.body });
+          const names = getReturnedElementNames(node.body);
+          if (names.length > 0) {
+            returnedItems.push({ names, node: node.body });
           }
         } else {
           // Traverse the function body to find all return statements
@@ -285,22 +363,32 @@ export default createRule<[], MessageIds>({
               : node.body;
 
           if (body) {
-            collectReturns(body, returnedNames);
+            collectReturns(body, returnedItems);
           }
         }
 
         // Validate each return
-        for (const { name, node: returnNode } of returnedNames) {
-          // Get the actual type ID for the returned component
-          const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
+        for (const { names, node: returnNode } of returnedItems) {
+          // For transparent wrappers, ALL extracted children must be valid
+          // For non-transparent returns, names will have a single element
+          const allValid = names.every((name) => {
+            const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
+            return isValidReturn(name, expandedAnnotation, resolvedRenderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined);
+          });
 
-          if (!isValidReturn(name, expandedAnnotation, resolvedRenderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
+          if (!allValid) {
+            // Find the first invalid name for the error message
+            const invalidName = names.find((name) => {
+              const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
+              return !isValidReturn(name, expandedAnnotation, resolvedRenderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined);
+            });
+
             context.report({
               node: returnNode,
               messageId: "invalidRenderReturn",
               data: {
                 expected: formatExpected(expandedAnnotation),
-                actual: name,
+                actual: invalidName ?? names[0],
               },
             });
           }
