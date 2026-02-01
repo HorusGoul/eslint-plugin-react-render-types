@@ -64,6 +64,43 @@ Run a specific test file:
 pnpm vitest run tests/rules/valid-render-prop.test.ts
 ```
 
+## Workflow
+
+### Starting work
+
+1. Always branch from `main`. Never commit directly to `main`.
+2. Use branch name prefixes: `feat/`, `fix/`, `ci/`, `chore/` (e.g., `feat/union-type-support`).
+
+### Validating changes
+
+Run before pushing — all must pass:
+
+```bash
+pnpm build && pnpm test:run && pnpm typecheck
+```
+
+Then validate the example project:
+
+```bash
+cd example && pnpm install && pnpm lint:update-snapshot
+```
+
+If `lint-snapshot.txt` changed, check the diff is expected and commit the update. If no plugin changes affected lint output, the snapshot should be unchanged.
+
+### Changesets
+
+Always add a changeset when modifying files under `src/`. Run `pnpm changeset` and select the appropriate semver bump (patch for fixes, minor for features, major for breaking changes).
+
+### PRs and CI
+
+- Create PRs using GitHub MCP tools (`create_pull_request`). Fall back to `gh pr create` if MCP is unavailable. If neither works, ask the user.
+- After pushing, check CI status. Use GitHub MCP (`pull_request_read` with `get_status` or `get_files`) or check the PR page.
+- Do not merge until CI is green.
+
+### Keeping CLAUDE.md current
+
+When the user corrects a workflow step, naming convention, architecture assumption, or any other project norm during a session, update this file to reflect the correction. This file should always match how the project actually works.
+
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`): build → test → typecheck → install example deps → lint example (snapshot diff against `example/lint-snapshot.txt`) → changesets release on main.
