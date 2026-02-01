@@ -437,3 +437,56 @@ describe("parseTransparentAnnotation", () => {
     expect(parseTransparentAnnotation("@transparent")).toBe(true);
   });
 });
+
+describe("@renders! unchecked flag", () => {
+  it("should parse @renders! with unchecked flag", () => {
+    const result = parseRendersAnnotation("/** @renders! {Header} */");
+    expect(result).toEqual({
+      componentName: "Header",
+      componentNames: ["Header"],
+      modifier: "required",
+      raw: "@renders! {Header}",
+      unchecked: true,
+    });
+  });
+
+  it("should parse @renders?! (optional + unchecked)", () => {
+    const result = parseRendersAnnotation("/** @renders?! {Header} */");
+    expect(result).toEqual({
+      componentName: "Header",
+      componentNames: ["Header"],
+      modifier: "optional",
+      raw: "@renders?! {Header}",
+      unchecked: true,
+    });
+  });
+
+  it("should parse @renders*! (many + unchecked)", () => {
+    const result = parseRendersAnnotation("/** @renders*! {MenuItem} */");
+    expect(result).toEqual({
+      componentName: "MenuItem",
+      componentNames: ["MenuItem"],
+      modifier: "many",
+      raw: "@renders*! {MenuItem}",
+      unchecked: true,
+    });
+  });
+
+  it("should parse @renders! with union types", () => {
+    const result = parseRendersAnnotation(
+      "/** @renders! {Header | Footer} */"
+    );
+    expect(result).toEqual({
+      componentName: "Header",
+      componentNames: ["Header", "Footer"],
+      modifier: "required",
+      raw: "@renders! {Header | Footer}",
+      unchecked: true,
+    });
+  });
+
+  it("should not set unchecked for regular @renders", () => {
+    const result = parseRendersAnnotation("/** @renders {Header} */");
+    expect(result?.unchecked).toBeUndefined();
+  });
+});

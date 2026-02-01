@@ -594,6 +594,174 @@ ruleTester.run("valid-render-return", rule, {
       ),
       filename: "test.tsx",
     },
+    // Logical AND expression returning component
+    {
+      name: "logical AND expression returning component",
+      code: withComponents(
+        `
+        /** @renders? {Header} */
+        function ConditionalHeader({ show }: { show: boolean }) {
+          return show && <Header />;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Ternary expression with two valid components
+    {
+      name: "ternary expression with two valid components",
+      code: withComponents(
+        `
+        /** @renders {Header | Footer} */
+        function FlexComponent({ isHeader }: { isHeader: boolean }) {
+          return isHeader ? <Header /> : <Footer />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Ternary with null branch
+    {
+      name: "ternary with null branch (optional)",
+      code: withComponents(
+        `
+        /** @renders? {Header} */
+        function MaybeHeader({ show }: { show: boolean }) {
+          return show ? <Header /> : null;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Nested logical AND expressions
+    {
+      name: "nested logical AND expressions",
+      code: withComponents(
+        `
+        /** @renders? {Header} */
+        function DeepConditional({ cond1, cond2 }: { cond1: boolean; cond2: boolean }) {
+          return cond1 && cond2 && <Header />;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Transparent wrapper with expression container child
+    {
+      name: "transparent wrapper with expression container child",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders? {Header} */
+        function MyHeader({ show }: { show: boolean }) {
+          return <Wrapper>{show && <Header />}</Wrapper>;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Transparent wrapper with ternary child
+    {
+      name: "transparent wrapper with ternary child",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header | Footer} */
+        function FlexHeader({ isHeader }: { isHeader: boolean }) {
+          return <Wrapper>{isHeader ? <Header /> : <Footer />}</Wrapper>;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // .map() returning component inside Fragment
+    {
+      name: "map expression returning annotated component",
+      code: withComponents(
+        `
+        /** @renders* {MenuItem} */
+        function MenuItems({ items }: { items: string[] }) {
+          return <>{items.map(item => <MenuItem key={item} />)}</>;
+        }
+      `,
+        ["MenuItem"]
+      ),
+      filename: "test.tsx",
+    },
+    // .flatMap() returning component
+    {
+      name: "flatMap expression returning annotated component",
+      code: withComponents(
+        `
+        /** @renders* {MenuItem} */
+        function MenuItems({ items }: { items: string[][] }) {
+          return <>{items.flatMap(group => group.map(item => <MenuItem key={item} />))}</>;
+        }
+      `,
+        ["MenuItem"]
+      ),
+      filename: "test.tsx",
+    },
+    // .map() with block body
+    {
+      name: "map with block body returning annotated component",
+      code: withComponents(
+        `
+        /** @renders* {MenuItem} */
+        function MenuItems({ items }: { items: string[] }) {
+          return <>{items.map(item => {
+            return <MenuItem key={item} />;
+          })}</>;
+        }
+      `,
+        ["MenuItem"]
+      ),
+      filename: "test.tsx",
+    },
+    // @renders! escape hatch - skips return validation
+    {
+      name: "unchecked annotation skips return validation",
+      code: withComponents(
+        `
+        const registry: Record<string, React.FC> = {};
+        /** @renders! {Header} */
+        function DynamicComponent({ type }: { type: string }) {
+          return registry[type];
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // @renders?! escape hatch with optional
+    {
+      name: "unchecked optional annotation skips return validation",
+      code: withComponents(
+        `
+        const registry: Record<string, React.FC> = {};
+        /** @renders?! {Header} */
+        function MaybeDynamic({ type }: { type?: string }) {
+          return type ? registry[type] : null;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
   ],
   invalid: [
     // Wrong component returned
@@ -1047,6 +1215,75 @@ ruleTester.run("valid-render-return", rule, {
           data: {
             expected: "Header",
             actual: "div",
+          },
+        },
+      ],
+    },
+    // Logical AND with wrong component
+    {
+      name: "logical AND with wrong component",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        function BadComponent({ show }: { show: boolean }) {
+          return show && <Footer />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Ternary with wrong component in one branch
+    {
+      name: "ternary with wrong component in consequent",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        function BadComponent({ cond }: { cond: boolean }) {
+          return cond ? <Footer /> : <Header />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    // .map() callback returning wrong component
+    {
+      name: "map callback returning wrong component",
+      code: withComponents(
+        `
+        /** @renders* {MenuItem} */
+        function BadMenu({ items }: { items: string[] }) {
+          return <>{items.map(item => <Button key={item} />)}</>;
+        }
+      `,
+        ["MenuItem", "Button"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "MenuItem",
+            actual: "Button",
           },
         },
       ],
