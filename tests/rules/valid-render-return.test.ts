@@ -732,6 +732,93 @@ ruleTester.run("valid-render-return", rule, {
       ),
       filename: "test.tsx",
     },
+    // Exported function declaration with @renders
+    {
+      name: "exported function declaration with @renders",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        export function MyHeader() {
+          return <Header />;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Exported arrow function with @renders
+    {
+      name: "exported arrow function with @renders",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        export const MyHeader = () => <Header />;
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Exported arrow function with block body and @renders
+    {
+      name: "exported arrow function with block body and @renders",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        export const MyHeader = () => {
+          return <Header />;
+        };
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Exported function expression with @renders
+    {
+      name: "exported function expression with @renders",
+      code: withComponents(
+        `
+        /** @renders {Footer} */
+        export const MyFooter = function() {
+          return <Footer />;
+        };
+      `,
+        ["Footer"]
+      ),
+      filename: "test.tsx",
+    },
+    // Export default function declaration with @renders
+    {
+      name: "export default function declaration with @renders",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        export default function MyHeader() {
+          return <Header />;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    // Exported @transparent wrapper
+    {
+      name: "exported transparent wrapper",
+      code: withComponents(
+        `
+        /** @transparent */
+        export function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Wrapper><Header /></Wrapper>;
+        }
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
     // @renders! escape hatch - skips return validation
     {
       name: "unchecked annotation skips return validation",
@@ -1250,6 +1337,73 @@ ruleTester.run("valid-render-return", rule, {
         /** @renders {Header} */
         function BadComponent({ cond }: { cond: boolean }) {
           return cond ? <Footer /> : <Header />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Exported function returning wrong component
+    {
+      name: "exported function returning wrong component",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        export function MyHeader() {
+          return <Footer />;
+        }
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Exported arrow function returning wrong component
+    {
+      name: "exported arrow function returning wrong component",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        export const MyHeader = () => <Footer />;
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    // Export default function returning wrong component
+    {
+      name: "export default function returning wrong component",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        export default function MyHeader() {
+          return <Footer />;
         }
       `,
         ["Header", "Footer"]

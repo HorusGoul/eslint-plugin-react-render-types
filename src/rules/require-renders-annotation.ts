@@ -154,11 +154,20 @@ export default createRule<[], MessageIds>({
      */
     function hasRendersAnnotation(node: FunctionNode): boolean {
       // For variable declarations (const MyComp = () => ...), check parent
-      const nodeToCheck =
+      let nodeToCheck: TSESTree.Node =
         node.parent?.type === "VariableDeclarator" &&
         node.parent.parent?.type === "VariableDeclaration"
           ? node.parent.parent
           : node;
+
+      // For exported declarations, the JSDoc sits before `export`, not the
+      // inner declaration — walk up to ExportNamedDeclaration / ExportDefaultDeclaration
+      if (
+        nodeToCheck.parent?.type === "ExportNamedDeclaration" ||
+        nodeToCheck.parent?.type === "ExportDefaultDeclaration"
+      ) {
+        nodeToCheck = nodeToCheck.parent;
+      }
 
       const comments = sourceCode.getCommentsBefore(nodeToCheck);
 

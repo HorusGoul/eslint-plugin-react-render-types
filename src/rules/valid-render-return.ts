@@ -79,11 +79,19 @@ export default createRule<[], MessageIds>({
      */
     function getRendersAnnotation(node: FunctionNode): RendersAnnotation | null {
       // For variable declarations (const MyComp = () => ...), check parent
-      const nodeToCheck =
+      let nodeToCheck: TSESTree.Node =
         node.parent?.type === "VariableDeclarator" &&
         node.parent.parent?.type === "VariableDeclaration"
           ? node.parent.parent
           : node;
+
+      // For exported declarations, the JSDoc sits before `export`
+      if (
+        nodeToCheck.parent?.type === "ExportNamedDeclaration" ||
+        nodeToCheck.parent?.type === "ExportDefaultDeclaration"
+      ) {
+        nodeToCheck = nodeToCheck.parent;
+      }
 
       const comments = sourceCode.getCommentsBefore(nodeToCheck);
 
@@ -175,11 +183,18 @@ export default createRule<[], MessageIds>({
      * Check if a function node has a @transparent annotation
      */
     function hasTransparentAnnotation(node: FunctionNode): boolean {
-      const nodeToCheck =
+      let nodeToCheck: TSESTree.Node =
         node.parent?.type === "VariableDeclarator" &&
         node.parent.parent?.type === "VariableDeclaration"
           ? node.parent.parent
           : node;
+
+      if (
+        nodeToCheck.parent?.type === "ExportNamedDeclaration" ||
+        nodeToCheck.parent?.type === "ExportDefaultDeclaration"
+      ) {
+        nodeToCheck = nodeToCheck.parent;
+      }
 
       const comments = sourceCode.getCommentsBefore(nodeToCheck);
 

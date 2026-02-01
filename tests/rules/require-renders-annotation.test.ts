@@ -132,6 +132,59 @@ ruleTester.run("require-renders-annotation", rule, {
       `,
       filename: "test.tsx",
     },
+    // Exported function declaration with @renders
+    {
+      name: "exported function declaration with @renders",
+      code: `
+        /** @renders {Header} */
+        export function MyHeader() {
+          return <Header />;
+        }
+      `,
+      filename: "test.tsx",
+    },
+    // Exported arrow function with @renders
+    {
+      name: "exported arrow function with @renders",
+      code: `
+        /** @renders {Header} */
+        export const MyHeader = () => <Header />;
+      `,
+      filename: "test.tsx",
+    },
+    // Exported arrow function with block body and @renders
+    {
+      name: "exported arrow function with block body and @renders",
+      code: `
+        /** @renders {Header} */
+        export const MyHeader = () => {
+          return <Header />;
+        };
+      `,
+      filename: "test.tsx",
+    },
+    // Exported function expression with @renders
+    {
+      name: "exported function expression with @renders",
+      code: `
+        /** @renders {Footer} */
+        export const MyFooter = function() {
+          return <Footer />;
+        };
+      `,
+      filename: "test.tsx",
+    },
+    // Export default function declaration with @renders
+    {
+      name: "export default function declaration with @renders",
+      code: `
+        /** @renders {Header} */
+        export default function MyHeader() {
+          return <Header />;
+        }
+      `,
+      filename: "test.tsx",
+    },
   ],
   invalid: [
     // Missing annotation on function declaration
@@ -260,6 +313,36 @@ ruleTester.run("require-renders-annotation", rule, {
         function MyHeader() {
           return <Header />;
         }
+      `,
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "missingRendersAnnotation",
+          data: { componentName: "MyHeader" },
+        },
+      ],
+    },
+    // Exported function declaration missing @renders
+    {
+      name: "exported function declaration missing @renders",
+      code: `
+        export function MyHeader() {
+          return <Header />;
+        }
+      `,
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "missingRendersAnnotation",
+          data: { componentName: "MyHeader" },
+        },
+      ],
+    },
+    // Exported arrow function missing @renders
+    {
+      name: "exported arrow function missing @renders",
+      code: `
+        export const MyHeader = () => <Header />;
       `,
       filename: "test.tsx",
       errors: [

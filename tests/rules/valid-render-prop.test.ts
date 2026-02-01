@@ -323,6 +323,95 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // Exported component with @renders used as prop value
+    {
+      name: "exported component with @renders used as prop value",
+      code: withComponents(
+        `
+        /** @renders {MenuItem} */
+        export function MyMenuItem() {
+          return <MenuItem />;
+        }
+
+        interface MenuProps {
+          /** @renders {MenuItem} */
+          item: React.ReactNode;
+        }
+
+        <Menu item={<MyMenuItem />} />;
+      `,
+        ["MenuItem", "Menu"]
+      ),
+      filename: "test.tsx",
+    },
+    // Exported arrow component with @renders used as children
+    {
+      name: "exported arrow component with @renders used as children",
+      code: withComponents(
+        `
+        /** @renders {Tab} */
+        export const MyTab = () => <Tab />;
+
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        <Tabs>
+          <MyTab />
+        </Tabs>;
+      `,
+        ["Tab", "Tabs"]
+      ),
+      filename: "test.tsx",
+    },
+    // Exported component with @renders in chained rendering for prop
+    {
+      name: "exported component chained rendering in prop",
+      code: withComponents(
+        `
+        /** @renders {MenuItem} */
+        export function BaseMenuItem() {
+          return <MenuItem />;
+        }
+
+        /** @renders {MenuItem} */
+        function CustomMenuItem() {
+          return <BaseMenuItem />;
+        }
+
+        interface MenuProps {
+          /** @renders {MenuItem} */
+          item: React.ReactNode;
+        }
+
+        <Menu item={<CustomMenuItem />} />;
+      `,
+        ["MenuItem", "Menu"]
+      ),
+      filename: "test.tsx",
+    },
+    // Exported transparent wrapper used in prop
+    {
+      name: "exported transparent wrapper used in prop",
+      code: withComponents(
+        `
+        /** @transparent */
+        export function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface MenuProps {
+          /** @renders {MenuItem} */
+          item: React.ReactNode;
+        }
+
+        <Menu item={<Wrapper><MenuItem /></Wrapper>} />;
+      `,
+        ["MenuItem", "Menu"]
+      ),
+      filename: "test.tsx",
+    },
     // .map() expression in children
     {
       name: "map expression in children",
@@ -590,6 +679,67 @@ ruleTester.run("valid-render-prop", rule, {
           data: {
             expected: "Tab",
             actual: "Button",
+          },
+        },
+      ],
+    },
+    // Exported component with wrong @renders used as prop
+    {
+      name: "exported component with wrong renders used as prop",
+      code: withComponents(
+        `
+        /** @renders {Footer} */
+        export function MyFooter() {
+          return <Footer />;
+        }
+
+        interface MenuProps {
+          /** @renders {MenuItem} */
+          item: React.ReactNode;
+        }
+
+        <Menu item={<MyFooter />} />;
+      `,
+        ["Footer", "MenuItem", "Menu"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "item",
+            expected: "MenuItem",
+            actual: "MyFooter",
+          },
+        },
+      ],
+    },
+    // Exported arrow component with wrong @renders used as children
+    {
+      name: "exported arrow component with wrong renders used as children",
+      code: withComponents(
+        `
+        /** @renders {Footer} */
+        export const MyFooter = () => <Footer />;
+
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        <Tabs>
+          <MyFooter />
+        </Tabs>;
+      `,
+        ["Footer", "Tab", "Tabs"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "Tab",
+            actual: "MyFooter",
           },
         },
       ],

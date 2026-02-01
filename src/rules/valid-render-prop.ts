@@ -155,11 +155,19 @@ export default createRule<[], MessageIds>({
      */
     function collectComponentAnnotation(node: FunctionNode): void {
       // For variable declarations (const MyComp = () => ...), check parent
-      const nodeToCheck =
+      let nodeToCheck: TSESTree.Node =
         node.parent?.type === "VariableDeclarator" &&
         node.parent.parent?.type === "VariableDeclaration"
           ? node.parent.parent
           : node;
+
+      // For exported declarations, the JSDoc sits before `export`
+      if (
+        nodeToCheck.parent?.type === "ExportNamedDeclaration" ||
+        nodeToCheck.parent?.type === "ExportDefaultDeclaration"
+      ) {
+        nodeToCheck = nodeToCheck.parent;
+      }
 
       // Check for @transparent
       const componentName = getComponentName(node);
