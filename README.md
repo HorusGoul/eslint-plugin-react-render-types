@@ -21,6 +21,10 @@ This plugin allows you to annotate components with `@renders` JSDoc comments, th
 1. Components return what they declare
 2. Props expecting specific render types receive compatible components
 
+## Example
+
+See the [example project](./example/) for a full dashboard app demonstrating cross-file render type validation with a design system built on React, Vite, and shadcn/ui.
+
 ## Installation
 
 ```bash
