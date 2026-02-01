@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint src",
+    "lint:update-snapshot": "eslint src 2>&1 | sed \"s|$(pwd)/||g\" > lint-snapshot.txt || true",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
