@@ -6,7 +6,7 @@ import { getJSXElementName, isComponentName } from "../utils/component-utils.js"
 import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx-extraction.js";
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
-import type { RendersAnnotation, ResolvedRenderMap } from "../types/index.js";
+import type { RendersAnnotation, ResolvedRendersAnnotation, ResolvedRenderMap } from "../types/index.js";
 
 type MessageIds = "invalidRenderProp" | "invalidRenderChildren";
 
@@ -40,7 +40,8 @@ export default createRule<[], MessageIds>({
 
     // Store prop annotations from interfaces/types
     // Map of "ComponentName.propName" -> RendersAnnotation
-    const propAnnotations = new Map<string, RendersAnnotation>();
+    // External annotations may include pre-resolved targetTypeId/targetTypeIds
+    const propAnnotations = new Map<string, RendersAnnotation | ResolvedRendersAnnotation>();
 
     // Get typed parser services (required for this rule)
     const parserServices = ESLintUtils.getParserServices(context);
@@ -278,8 +279,13 @@ export default createRule<[], MessageIds>({
       }
 
       if (passedValues.length > 0) {
-        const expectedTypeId = crossFileResolver.getComponentTypeId(annotation.componentName) ?? undefined;
-        const expectedTypeIds = getExpectedTypeIds(annotation);
+        // Use pre-resolved type IDs from source context if available (external annotations),
+        // otherwise resolve from the current file's scope (local annotations)
+        const resolved = annotation as ResolvedRendersAnnotation;
+        const expectedTypeId = resolved.targetTypeId
+          ?? crossFileResolver.getComponentTypeId(annotation.componentName)
+          ?? undefined;
+        const expectedTypeIds = resolved.targetTypeIds ?? getExpectedTypeIds(annotation);
 
         // All extracted values must be valid
         for (const passedValue of passedValues) {
@@ -333,8 +339,13 @@ export default createRule<[], MessageIds>({
         return;
       }
 
-      const expectedTypeId = crossFileResolver.getComponentTypeId(annotation.componentName) ?? undefined;
-      const expectedTypeIds = getExpectedTypeIds(annotation);
+      // Use pre-resolved type IDs from source context if available (external annotations),
+      // otherwise resolve from the current file's scope (local annotations)
+      const resolved = annotation as ResolvedRendersAnnotation;
+      const expectedTypeId = resolved.targetTypeId
+        ?? crossFileResolver.getComponentTypeId(annotation.componentName)
+        ?? undefined;
+      const expectedTypeIds = resolved.targetTypeIds ?? getExpectedTypeIds(annotation);
 
       // Validate each child
       for (const child of node.children) {
@@ -372,6 +383,30 @@ export default createRule<[], MessageIds>({
      */
     function validateAllJSXElements(): void {
       const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
+
+      // Resolve external prop annotations for imported components
+      const resolvedElements = new Set<string>();
+      for (const node of jsxElementsToValidate) {
+        const name = getJSXElementName(node);
+        if (!name || resolvedElements.has(name)) continue;
+        resolvedElements.add(name);
+
+        // Skip if we already have local annotations for this component
+        const hasLocal = [...propAnnotations.keys()].some(
+          (key) =>
+            key.startsWith(`${name}Props.`) ||
+            key.startsWith(`${name}.`) ||
+            key.startsWith(`I${name}Props.`)
+        );
+        if (hasLocal) continue;
+
+        const external = crossFileResolver.getExternalPropAnnotations(name);
+        if (external) {
+          for (const [propName, annotation] of external) {
+            propAnnotations.set(`${name}Props.${propName}`, annotation);
+          }
+        }
+      }
 
       // Expand type aliases in prop annotations
       for (const [key, annotation] of propAnnotations) {

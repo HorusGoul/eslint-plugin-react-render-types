@@ -429,6 +429,51 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // Union @renders* children accepts annotated chain and direct unannotated match
+    {
+      name: "union @renders* children accepts annotated and unannotated components",
+      code: withComponents(
+        `
+        /** @renders {NavItem} */
+        function NavLink() {
+          return <NavItem />;
+        }
+
+        interface SidebarProps {
+          /** @renders* {NavItem | NavSection} */
+          children: React.ReactNode;
+        }
+
+        <Sidebar>
+          <NavLink />
+          <NavSection />
+        </Sidebar>;
+      `,
+        ["NavItem", "NavSection", "Sidebar"]
+      ),
+      filename: "test.tsx",
+    },
+    // Union @renders* named prop via fragment accepts annotated and unannotated
+    {
+      name: "union @renders* named prop via fragment accepts annotated and unannotated",
+      code: withComponents(
+        `
+        /** @renders {NavItem} */
+        function NavLink() {
+          return <NavItem />;
+        }
+
+        interface LayoutProps {
+          /** @renders* {NavItem | NavSection} */
+          navigation: React.ReactNode;
+        }
+
+        <Layout navigation={<><NavLink /><NavSection /></>} />;
+      `,
+        ["NavItem", "NavSection", "Layout"]
+      ),
+      filename: "test.tsx",
+    },
   ],
   invalid: [
     // Wrong component passed to prop
@@ -740,6 +785,70 @@ ruleTester.run("valid-render-prop", rule, {
           data: {
             expected: "Tab",
             actual: "MyFooter",
+          },
+        },
+      ],
+    },
+    // Unannotated component among valid children with @renders*
+    {
+      name: "unannotated component in @renders* children",
+      code: withComponents(
+        `
+        /** @renders {NavItem} */
+        function NavLink() {
+          return <NavItem />;
+        }
+
+        interface SidebarProps {
+          /** @renders* {NavItem} */
+          children: React.ReactNode;
+        }
+
+        <Sidebar>
+          <NavLink />
+          <NavSection />
+        </Sidebar>;
+      `,
+        ["NavItem", "NavSection", "Sidebar"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "NavItem",
+            actual: "NavSection",
+          },
+        },
+      ],
+    },
+    // Unannotated component in @renders* named prop via fragment
+    {
+      name: "unannotated component in @renders* named prop via fragment",
+      code: withComponents(
+        `
+        /** @renders {NavItem} */
+        function NavLink() {
+          return <NavItem />;
+        }
+
+        interface LayoutProps {
+          /** @renders* {NavItem} */
+          navigation: React.ReactNode;
+        }
+
+        <Layout navigation={<><NavLink /><NavSection /></>} />;
+      `,
+        ["NavItem", "NavSection", "Layout"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "navigation",
+            expected: "NavItem",
+            actual: "NavSection",
           },
         },
       ],

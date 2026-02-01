@@ -2,6 +2,7 @@ import type { ParserServicesWithTypeInformation } from "@typescript-eslint/utils
 import type { SourceCode } from "@typescript-eslint/utils/ts-eslint";
 import type {
   RendersAnnotation,
+  ResolvedRendersAnnotation,
   ResolvedRenderMap,
   ComponentTypeId,
 } from "../types/index.js";
@@ -332,6 +333,78 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
   }
 
   /**
+   * Get the type ID for a component by name resolved from a specific scope.
+   * Used to resolve annotation targets from the file where the annotation is defined.
+   */
+  function getComponentTypeIdInScope(
+    componentName: string,
+    scopeNode: ts.Node
+  ): ComponentTypeId | null {
+    const parts = componentName.split(".");
+    const baseName = parts[0];
+
+    const symbol = typeChecker.resolveName(
+      baseName,
+      scopeNode,
+      ts.SymbolFlags.Value | ts.SymbolFlags.Alias,
+      /* excludeGlobals */ false
+    );
+
+    if (!symbol) {
+      return null;
+    }
+
+    if (parts.length > 1) {
+      const type = typeChecker.getTypeOfSymbol(symbol);
+      let currentType = type;
+
+      for (let i = 1; i < parts.length; i++) {
+        const prop = currentType.getProperty(parts[i]);
+        if (!prop) {
+          return null;
+        }
+        if (i === parts.length - 1) {
+          return createTypeId(prop);
+        }
+        currentType = typeChecker.getTypeOfSymbol(prop);
+      }
+    }
+
+    return createTypeId(symbol);
+  }
+
+  /**
+   * Resolve the source file that an import declaration points to.
+   */
+  function resolveImportSourceFile(
+    importDeclaration: ts.ImportDeclaration
+  ): ts.SourceFile | null {
+    const moduleSpecifier = importDeclaration.moduleSpecifier;
+    if (!ts.isStringLiteral(moduleSpecifier)) {
+      return null;
+    }
+
+    const importSourceFile = importDeclaration.getSourceFile();
+    const resolvedModule = ts.resolveModuleName(
+      moduleSpecifier.text,
+      importSourceFile.fileName,
+      program.getCompilerOptions(),
+      ts.sys
+    );
+
+    if (
+      !resolvedModule.resolvedModule ||
+      !resolvedModule.resolvedModule.resolvedFileName
+    ) {
+      return null;
+    }
+
+    return program.getSourceFile(
+      resolvedModule.resolvedModule.resolvedFileName
+    ) ?? null;
+  }
+
+  /**
    * Resolve the type ID for the primary component in a @renders annotation.
    * This looks up the component name in the current file's scope.
    */
@@ -520,13 +593,23 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
       if (annotation) {
         // Expand type aliases (e.g., type AliasedUnion = A | B)
         const expandedAnnotation = expandTypeAliases(annotation);
-        const targetTypeId = resolveAnnotationTargetTypeId(expandedAnnotation);
-        const targetTypeIds = resolveAnnotationTargetTypeIds(expandedAnnotation).filter(
-          (id): id is ComponentTypeId => id !== undefined
-        );
+
+        // Resolve target type IDs from the SOURCE file where the annotation lives,
+        // not from the consumer file (the target may not be imported in the consumer)
+        const sourceFile = resolveImportSourceFile(importInfo.importDeclaration);
+        const scopeNode = sourceFile ?? currentSourceFile;
+
+        const targetTypeId = getComponentTypeIdInScope(
+          expandedAnnotation.componentName,
+          scopeNode
+        ) ?? undefined;
+        const targetTypeIds = expandedAnnotation.componentNames
+          .map((name) => getComponentTypeIdInScope(name, scopeNode))
+          .filter((id): id is ComponentTypeId => id !== null);
+
         resolvedMap.set(localName, {
           ...expandedAnnotation,
-          targetTypeId: targetTypeId ?? undefined,
+          targetTypeId,
           targetTypeIds: targetTypeIds.length > 0 ? targetTypeIds : undefined,
         });
       }
@@ -535,10 +618,74 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
     return resolvedMap;
   }
 
+  /**
+   * Resolve @renders annotations from an imported component's props type.
+   * Uses TypeScript's type checker to find the props interface and parse
+   * JSDoc annotations from its property declarations.
+   * Target type IDs are resolved from the source file's scope where the
+   * annotation is defined, so consumers don't need to import target types.
+   */
+  function getExternalPropAnnotations(
+    componentName: string
+  ): Map<string, ResolvedRendersAnnotation> | null {
+    if (!currentSourceFile) return null;
+
+    const symbol = typeChecker.resolveName(
+      componentName,
+      currentSourceFile,
+      ts.SymbolFlags.Value | ts.SymbolFlags.Alias,
+      /* excludeGlobals */ false
+    );
+    if (!symbol) return null;
+
+    const type = typeChecker.getTypeOfSymbol(symbol);
+    const callSignatures = type.getCallSignatures();
+    if (callSignatures.length === 0) return null;
+
+    const propsParam = callSignatures[0].getParameters()[0];
+    if (!propsParam) return null;
+
+    const propsType = typeChecker.getTypeOfSymbol(propsParam);
+    const result = new Map<string, ResolvedRendersAnnotation>();
+
+    for (const prop of propsType.getProperties()) {
+      const declarations = prop.getDeclarations();
+      if (!declarations || declarations.length === 0) continue;
+
+      for (const decl of declarations) {
+        const jsDocText = getJSDocText(decl);
+        if (!jsDocText) continue;
+
+        const annotation = parseRendersAnnotation(jsDocText);
+        if (annotation) {
+          // Resolve target type IDs from the source file where the annotation lives
+          const sourceFile = decl.getSourceFile();
+          const targetTypeId = getComponentTypeIdInScope(
+            annotation.componentName,
+            sourceFile
+          ) ?? undefined;
+          const targetTypeIds = annotation.componentNames
+            .map((name) => getComponentTypeIdInScope(name, sourceFile))
+            .filter((id): id is ComponentTypeId => id !== null);
+
+          result.set(prop.getName(), {
+            ...annotation,
+            targetTypeId,
+            targetTypeIds: targetTypeIds.length > 0 ? targetTypeIds : undefined,
+          });
+          break;
+        }
+      }
+    }
+
+    return result.size > 0 ? result : null;
+  }
+
   return {
     getComponentTypeId,
     buildResolvedRenderMap,
     expandTypeAliases,
     resolveTypeAliasToComponentNames,
+    getExternalPropAnnotations,
   };
 }
