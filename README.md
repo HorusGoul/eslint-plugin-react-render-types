@@ -42,6 +42,19 @@ This plugin requires:
 - `@typescript-eslint/parser` >= 8.0.0
 - `typescript` >= 5.0.0
 
+## Agent Skills
+
+This plugin provides agent skills for AI coding assistants (Claude Code, Cursor, Copilot, and [others](https://skills.sh/)). Install them to get help with setup, configuration, and composition patterns:
+
+```bash
+npx skills add HorusGoul/eslint-plugin-react-render-types
+```
+
+Available skills:
+
+- **react-render-types-setup** — Install, configure, and troubleshoot the plugin in your project
+- **react-render-types-composition** — Patterns for `@renders` annotations, transparent wrappers, render chains, and slot props
+
 ## Configuration
 
 ### ⚠️ Typed Linting Required
