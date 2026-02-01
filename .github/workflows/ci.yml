@@ -45,17 +45,11 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: example
 
-      - name: Lint example (valid files)
-        run: pnpm eslint src --ignore-pattern 'src/features/invalid-usage/**'
+      - name: Lint example (snapshot)
         working-directory: example
-
-      - name: Lint example (expect errors in invalid files)
         run: |
-          if pnpm eslint src/features/invalid-usage/; then
-            echo "::error::Expected lint errors in invalid-usage/ but ESLint passed"
-            exit 1
-          fi
-        working-directory: example
+          pnpm eslint src 2>&1 | sed "s|$(pwd)/||g" > /tmp/lint-output.txt || true
+          diff lint-snapshot.txt /tmp/lint-output.txt
 
       - name: Create Release Pull Request or Publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
