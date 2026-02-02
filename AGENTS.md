@@ -35,7 +35,7 @@ src/
     require-renders-annotation.ts   Requires @renders on all components (off by default)
     renders-uses-vars.ts      Marks @renders references as used (prevents no-unused-vars)
   utils/
-    cross-file-resolver.ts    Resolves components/annotations across files via TypeScript's type checker
+    cross-file-resolver.ts    Resolves @renders and @transparent annotations across files via TypeScript's type checker
     render-chain.ts           Follows @renders chains (A → B → C) using type IDs
     jsdoc-parser.ts           Parses @renders/@transparent JSDoc annotations
     jsx-extraction.ts         Extracts component names from JSX (ternary, &&, .map())

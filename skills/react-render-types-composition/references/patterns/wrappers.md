@@ -106,7 +106,7 @@ interface NavProps {
 
 ### Built-in and third-party transparent components
 
-Components like `Suspense` or `ErrorBoundary` can't be annotated with `@transparent` JSDoc. Use the `additionalTransparentComponents` shared setting instead:
+`@transparent` annotations work cross-file automatically — the plugin discovers them on imported components via TypeScript's type checker. For components like `Suspense` or `ErrorBoundary` that can't be annotated with JSDoc, use the `additionalTransparentComponents` shared setting instead:
 
 ```javascript
 // eslint.config.js

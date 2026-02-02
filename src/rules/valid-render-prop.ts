@@ -52,14 +52,14 @@ export default createRule<[], MessageIds>({
       filename: context.filename,
     });
 
-    // Track components marked as @transparent: name → prop names to extract from
-    const transparentComponents = new Map<string, Set<string>>();
+    // Local @transparent annotations collected during first AST pass
+    const localTransparentComponents = new Map<string, Set<string>>();
 
-    // Seed from shared settings
-    const { transparentComponentsMap } = getPluginSettings(context.settings);
-    for (const [name, props] of transparentComponentsMap) {
-      transparentComponents.set(name, props);
-    }
+    // Settings-based transparent components (remain name-based)
+    const { transparentComponentsMap: settingsTransparentComponents } = getPluginSettings(context.settings);
+
+    // Merged transparency map: built at Program:exit from settings + local + cross-file
+    let transparentComponents = new Map<string, Set<string>>();
 
     // Queue JSX elements for validation in Program:exit
     const jsxElementsToValidate: TSESTree.JSXElement[] = [];
@@ -186,7 +186,7 @@ export default createRule<[], MessageIds>({
             comment.type === "Block" ? `/*${comment.value}*/` : comment.value;
           const ta = parseTransparentAnnotation(text);
           if (ta) {
-            transparentComponents.set(componentName, new Set(ta.propNames));
+            localTransparentComponents.set(componentName, new Set(ta.propNames));
             break;
           }
         }
@@ -391,6 +391,16 @@ export default createRule<[], MessageIds>({
      */
     function validateAllJSXElements(): void {
       const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
+
+      // Build merged transparency map: settings + local + cross-file imports
+      transparentComponents = new Map<string, Set<string>>();
+      for (const [name, props] of settingsTransparentComponents) {
+        transparentComponents.set(name, props);
+      }
+      const resolvedTransparent = crossFileResolver.resolveTransparentComponents(localTransparentComponents);
+      for (const [name, props] of resolvedTransparent) {
+        transparentComponents.set(name, props);
+      }
 
       // Resolve external prop annotations for imported components
       const resolvedElements = new Set<string>();

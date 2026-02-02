@@ -45,14 +45,14 @@ export default createRule<[], MessageIds>({
       componentName: string;
     }> = [];
 
-    // Track components marked as @transparent: name → prop names to extract from
-    const transparentComponents = new Map<string, Set<string>>();
+    // Local @transparent annotations collected during first AST pass
+    const localTransparentComponents = new Map<string, Set<string>>();
 
-    // Seed from shared settings
-    const { transparentComponentsMap } = getPluginSettings(context.settings);
-    for (const [name, props] of transparentComponentsMap) {
-      transparentComponents.set(name, props);
-    }
+    // Settings-based transparent components (remain name-based)
+    const { transparentComponentsMap: settingsTransparentComponents } = getPluginSettings(context.settings);
+
+    // Merged transparency map: built at Program:exit from settings + local + cross-file
+    let transparentComponents = new Map<string, Set<string>>();
 
     // Get typed parser services (required for this rule)
     const parserServices = ESLintUtils.getParserServices(context);
@@ -227,7 +227,7 @@ export default createRule<[], MessageIds>({
       if (componentName && isComponentName(componentName)) {
         const ta = getTransparentAnnotation(node);
         if (ta) {
-          transparentComponents.set(componentName, new Set(ta.propNames));
+          localTransparentComponents.set(componentName, new Set(ta.propNames));
         }
       }
 
@@ -306,6 +306,16 @@ export default createRule<[], MessageIds>({
     function validateFunctions(): void {
       // Build the resolved render map with type IDs
       const resolvedRenderMap = crossFileResolver.buildResolvedRenderMap(localRenderMap);
+
+      // Build merged transparency map: settings + local + cross-file imports
+      transparentComponents = new Map<string, Set<string>>();
+      for (const [name, props] of settingsTransparentComponents) {
+        transparentComponents.set(name, props);
+      }
+      const resolvedTransparent = crossFileResolver.resolveTransparentComponents(localTransparentComponents);
+      for (const [name, props] of resolvedTransparent) {
+        transparentComponents.set(name, props);
+      }
 
       for (const { node, annotation, componentName } of functionsToValidate) {
         // Skip return validation for @renders! (unchecked)
