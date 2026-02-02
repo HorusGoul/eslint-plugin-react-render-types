@@ -48,6 +48,8 @@ function getRendersComponentNames(sourceText: string): Set<string> {
 }
 
 function init(modules: { typescript: typeof ts }) {
+  const tsModule = modules.typescript;
+
   function create(info: ts.server.PluginCreateInfo) {
     const proxy = Object.create(null) as ts.LanguageService;
 
@@ -58,30 +60,58 @@ function init(modules: { typescript: typeof ts }) {
       (proxy as any)[k] = (...args: any[]) => (x as any).apply(info.languageService, args);
     }
 
-    function filterDiagnostics<T extends ts.Diagnostic>(fileName: string, diagnostics: T[]): T[] {
-      const program = info.languageService.getProgram();
-      const sourceFile = program?.getSourceFile(fileName);
-      if (!sourceFile) return diagnostics;
-
-      const rendersNames = getRendersComponentNames(sourceFile.text);
-      if (rendersNames.size === 0) return diagnostics;
-
-      return diagnostics.filter((d) => {
-        if (!UNUSED_DIAGNOSTIC_CODES.has(d.code)) return true;
-        if (d.start == null || d.length == null) return true;
-        const name = sourceFile.text.substring(d.start, d.start + d.length);
-        return !rendersNames.has(name);
-      });
+    function isRendersReferencedImport(
+      d: ts.Diagnostic,
+      sourceFile: ts.SourceFile,
+      rendersNames: Set<string>,
+    ): boolean {
+      if (!UNUSED_DIAGNOSTIC_CODES.has(d.code)) return false;
+      if (d.start == null || d.length == null) return false;
+      const name = sourceFile.text.substring(d.start, d.start + d.length);
+      return rendersNames.has(name);
     }
 
-    proxy.getSemanticDiagnostics = (fileName: string) => {
-      const prior = info.languageService.getSemanticDiagnostics(fileName);
-      return filterDiagnostics(fileName, prior);
-    };
-
+    // Suggestion diagnostics: the greyed-out hints IDEs show for unused imports.
+    // These appear regardless of noUnusedLocals and drive "organize imports on save".
+    // We filter them out entirely for @renders-referenced imports.
     proxy.getSuggestionDiagnostics = (fileName: string) => {
       const prior = info.languageService.getSuggestionDiagnostics(fileName);
-      return filterDiagnostics(fileName, prior);
+
+      const program = info.languageService.getProgram();
+      const sourceFile = program?.getSourceFile(fileName);
+      if (!sourceFile) return prior;
+
+      const rendersNames = getRendersComponentNames(sourceFile.text);
+      if (rendersNames.size === 0) return prior;
+
+      return prior.filter((d) => !isRendersReferencedImport(d, sourceFile, rendersNames));
+    };
+
+    // Semantic diagnostics: hard errors from noUnusedLocals / noUnusedParameters.
+    // We don't suppress these — if the user enabled noUnusedLocals, they should
+    // see the error. Instead, we replace the message with advice to disable it.
+    proxy.getSemanticDiagnostics = (fileName: string) => {
+      const prior = info.languageService.getSemanticDiagnostics(fileName);
+
+      const program = info.languageService.getProgram();
+      const sourceFile = program?.getSourceFile(fileName);
+      if (!sourceFile) return prior;
+
+      const rendersNames = getRendersComponentNames(sourceFile.text);
+      if (rendersNames.size === 0) return prior;
+
+      return prior.map((d) => {
+        if (!isRendersReferencedImport(d, sourceFile, rendersNames)) return d;
+
+        const name = sourceFile.text.substring(d.start!, d.start! + d.length!);
+        return {
+          ...d,
+          messageText:
+            `'${name}' is referenced in a @renders annotation but noUnusedLocals treats it as unused. ` +
+            `Disable noUnusedLocals in tsconfig.json and use the ESLint no-unused-vars rule instead.`,
+          category: tsModule.DiagnosticCategory.Warning,
+        };
+      });
     };
 
     return proxy;
