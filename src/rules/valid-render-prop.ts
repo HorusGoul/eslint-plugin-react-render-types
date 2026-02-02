@@ -52,15 +52,13 @@ export default createRule<[], MessageIds>({
       filename: context.filename,
     });
 
-    // Track components marked as @transparent
-    const transparentComponents = new Set<string>();
+    // Track components marked as @transparent: name → prop names to extract from
+    const transparentComponents = new Map<string, Set<string>>();
 
     // Seed from shared settings
-    const { additionalTransparentComponents } = getPluginSettings(context.settings);
-    if (additionalTransparentComponents) {
-      for (const name of additionalTransparentComponents) {
-        transparentComponents.add(name);
-      }
+    const { transparentComponentsMap } = getPluginSettings(context.settings);
+    for (const [name, props] of transparentComponentsMap) {
+      transparentComponents.set(name, props);
     }
 
     // Queue JSX elements for validation in Program:exit
@@ -186,8 +184,9 @@ export default createRule<[], MessageIds>({
         for (const comment of comments) {
           const text =
             comment.type === "Block" ? `/*${comment.value}*/` : comment.value;
-          if (parseTransparentAnnotation(text)) {
-            transparentComponents.add(componentName);
+          const ta = parseTransparentAnnotation(text);
+          if (ta) {
+            transparentComponents.set(componentName, new Set(ta.propNames));
             break;
           }
         }

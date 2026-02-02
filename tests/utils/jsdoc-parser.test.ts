@@ -386,11 +386,13 @@ describe("parseRendersAnnotation", () => {
 });
 
 describe("parseTransparentAnnotation", () => {
-  it("should detect @transparent in block comment", () => {
-    expect(parseTransparentAnnotation("/** @transparent */")).toBe(true);
+  it("should parse bare @transparent as children default", () => {
+    expect(parseTransparentAnnotation("/** @transparent */")).toEqual({
+      propNames: ["children"],
+    });
   });
 
-  it("should detect @transparent in multiline block comment", () => {
+  it("should parse @transparent in multiline block comment", () => {
     expect(
       parseTransparentAnnotation(`
         /**
@@ -398,28 +400,27 @@ describe("parseTransparentAnnotation", () => {
          * @transparent
          */
       `)
-    ).toBe(true);
+    ).toEqual({ propNames: ["children"] });
   });
 
-  it("should return false when @transparent is absent", () => {
-    expect(parseTransparentAnnotation("/** @renders {Header} */")).toBe(false);
+  it("should return null when @transparent is absent", () => {
+    expect(parseTransparentAnnotation("/** @renders {Header} */")).toBeNull();
   });
 
-  it("should return false for empty string", () => {
-    expect(parseTransparentAnnotation("")).toBe(false);
+  it("should return null for empty string", () => {
+    expect(parseTransparentAnnotation("")).toBeNull();
   });
 
-  it("should return false for empty comment", () => {
-    expect(parseTransparentAnnotation("/** */")).toBe(false);
+  it("should return null for empty comment", () => {
+    expect(parseTransparentAnnotation("/** */")).toBeNull();
   });
 
   it("should not match @transparent in middle of word", () => {
-    expect(parseTransparentAnnotation("/** pre@transparent */")).toBe(false);
+    expect(parseTransparentAnnotation("/** pre@transparent */")).toBeNull();
   });
 
   it("should not match @transparently", () => {
-    // \b boundary ensures we match the full word
-    expect(parseTransparentAnnotation("/** @transparently */")).toBe(false);
+    expect(parseTransparentAnnotation("/** @transparently */")).toBeNull();
   });
 
   it("should detect @transparent alongside @renders", () => {
@@ -429,12 +430,65 @@ describe("parseTransparentAnnotation", () => {
        * @renders {Header}
        */
     `;
-    expect(parseTransparentAnnotation(comment)).toBe(true);
+    expect(parseTransparentAnnotation(comment)).toEqual({
+      propNames: ["children"],
+    });
     expect(parseRendersAnnotation(comment)).not.toBeNull();
   });
 
-  it("should detect @transparent in line comment", () => {
-    expect(parseTransparentAnnotation("@transparent")).toBe(true);
+  it("should parse @transparent in line comment", () => {
+    expect(parseTransparentAnnotation("@transparent")).toEqual({
+      propNames: ["children"],
+    });
+  });
+
+  // --- Named prop syntax ---
+
+  it("should parse @transparent {children} as explicit children", () => {
+    expect(
+      parseTransparentAnnotation("/** @transparent {children} */")
+    ).toEqual({ propNames: ["children"] });
+  });
+
+  it("should parse @transparent with named props", () => {
+    expect(
+      parseTransparentAnnotation("/** @transparent {off, children} */")
+    ).toEqual({ propNames: ["off", "children"] });
+  });
+
+  it("should parse @transparent with single named prop", () => {
+    expect(
+      parseTransparentAnnotation("/** @transparent {fallback} */")
+    ).toEqual({ propNames: ["fallback"] });
+  });
+
+  it("should handle whitespace in prop list", () => {
+    expect(
+      parseTransparentAnnotation("/** @transparent { off , children } */")
+    ).toEqual({ propNames: ["off", "children"] });
+  });
+
+  it("should parse @transparent with props in multiline JSDoc", () => {
+    expect(
+      parseTransparentAnnotation(
+        `/**\n * @transparent {off, children}\n */`
+      )
+    ).toEqual({ propNames: ["off", "children"] });
+  });
+
+  it("should default empty braces to children", () => {
+    expect(
+      parseTransparentAnnotation("/** @transparent {} */")
+    ).toEqual({ propNames: ["children"] });
+  });
+
+  it("should parse @transparent {props} alongside @renders", () => {
+    const comment =
+      "/** @transparent {fallback, children}\n * @renders {Header} */";
+    expect(parseTransparentAnnotation(comment)).toEqual({
+      propNames: ["fallback", "children"],
+    });
+    expect(parseRendersAnnotation(comment)).not.toBeNull();
   });
 });
 

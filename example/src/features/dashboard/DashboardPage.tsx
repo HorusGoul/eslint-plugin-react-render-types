@@ -29,6 +29,8 @@ import { FlexSlot } from "@/components/dashboard/FlexSlot";
 import { AppNavLink } from "@/components/navigation/AppNavLink";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { Button } from "@/design-system/ui/button";
+import { Flag } from "@/design-system/util/Flag";
+import { Suspense } from "react";
 
 const sampleData = [{ id: 1 }, { id: 2 }, { id: 3 }];
 
@@ -95,12 +97,21 @@ export function DashboardPage() {
           >
             <StatCard title="Revenue" value="$45,231" change={12.5} />
             <StatCard title="Customers" value="2,350" change={-3.1} />
-            <ChartCard
-              title="Weekly Sales"
-              data={[40, 55, 30, 65, 80, 60, 75]}
-              description="Last 7 days"
-            />
-            <StatCard title="Active Orders" value="573" change={8.2} />
+            {/* Suspense is transparent via settings — plugin sees through to ChartCard */}
+            <Suspense fallback={null}>
+              <ChartCard
+                title="Weekly Sales"
+                data={[40, 55, 30, 65, 80, 60, 75]}
+                description="Last 7 days"
+              />
+            </Suspense>
+            {/* Flag is transparent via @transparent {off, children} — plugin checks both props */}
+            <Flag
+              name="new-orders-card"
+              off={<StatCard title="Orders (legacy)" value="573" change={8.2} />}
+            >
+              <StatCard title="Active Orders" value="573" change={8.2} />
+            </Flag>
           </DashboardGrid>
 
           <ConditionalCard

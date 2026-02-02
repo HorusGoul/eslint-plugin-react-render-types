@@ -69,6 +69,41 @@ interface TabsProps {
 </Tabs>
 ```
 
+### Named prop transparency
+
+By default, `@transparent` only looks through `children`. Use the `{props}` syntax to specify additional props to look through:
+
+```tsx
+/** @transparent {off, children} */
+export function Flag({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+  const enabled = useFeatureFlag(name);
+  return <>{enabled ? children : off}</>;
+}
+```
+
+Now the plugin validates JSX in both the `off` prop and `children`:
+
+```tsx
+interface NavProps {
+  /** @renders* {NavItem} */
+  children: React.ReactNode;
+}
+
+// OK — plugin sees NavItem in both `off` and children
+<Nav>
+  <Flag name="new-feature" off={<NavItem label="Old" />}>
+    <NavItem label="New" />
+  </Flag>
+</Nav>
+
+// ERROR — Banner is not NavItem
+<Nav>
+  <Flag name="new-feature" off={<Banner />}>
+    <NavItem label="New" />
+  </Flag>
+</Nav>
+```
+
 ### Built-in and third-party transparent components
 
 Components like `Suspense` or `ErrorBoundary` can't be annotated with `@transparent` JSDoc. Use the `additionalTransparentComponents` shared setting instead:
@@ -82,6 +117,15 @@ Components like `Suspense` or `ErrorBoundary` can't be annotated with `@transpar
     },
   },
 }
+```
+
+For components with multiple transparent props, use the object format:
+
+```javascript
+additionalTransparentComponents: [
+  "Suspense",
+  { name: "Flag", props: ["off", "children"] },
+]
 ```
 
 Then the plugin sees through them automatically:

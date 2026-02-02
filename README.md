@@ -166,6 +166,8 @@ If you encounter issues:
 
 Specify component names that should be treated as transparent wrappers, allowing the plugin to "see through" them when validating `@renders` annotations. This is useful for built-in components like `Suspense` or third-party components you can't annotate with `@transparent`.
 
+**String entries** default to looking through `children`:
+
 ```javascript
 // eslint.config.js
 export default [
@@ -183,7 +185,16 @@ export default [
 ];
 ```
 
-With this setting, the plugin looks through configured components to validate their children:
+**Object entries** specify which props to look through:
+
+```javascript
+additionalTransparentComponents: [
+  "Suspense",
+  { name: "Flag", props: ["off", "children"] },
+]
+```
+
+With this setting, the plugin looks through configured components to validate their children and named props:
 
 ```tsx
 /** @renders {Header} */
@@ -194,6 +205,18 @@ function MyHeader() {
     </Suspense>
   );
 }
+
+interface NavProps {
+  /** @renders* {NavItem} */
+  children: React.ReactNode;
+}
+
+// Plugin validates NavItem in both `off` prop and children
+<Nav>
+  <Flag name="new-feature" off={<NavItem label="Old" />}>
+    <NavItem label="New" />
+  </Flag>
+</Nav>
 ```
 
 For member expressions like `<React.Suspense>`, use the dotted form: `"React.Suspense"`.
@@ -406,6 +429,31 @@ interface TabsProps {
   <Wrapper><Tab /></Wrapper>  {/* ✓ Valid */}
 </Tabs>
 ```
+
+#### Named Prop Transparency
+
+By default, `@transparent` looks through `children`. You can specify which props to look through:
+
+```tsx
+/** @transparent {off, children} */
+function Flag({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+  const isEnabled = useFeatureFlag(name);
+  return <>{isEnabled ? children : off}</>;
+}
+
+interface DashboardGridProps {
+  /** @renders* {DashboardCard} */
+  children: React.ReactNode;
+}
+
+<DashboardGrid>
+  <Flag name="new-feature" off={<StatCard ... />}>
+    <ChartCard ... />  {/* ✓ Both off and children are validated as DashboardCard */}
+  </Flag>
+</DashboardGrid>
+```
+
+`@transparent` (bare) and `@transparent {children}` are equivalent.
 
 ## Chained Rendering
 

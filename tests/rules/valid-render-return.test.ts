@@ -909,6 +909,66 @@ ruleTester.run("valid-render-return", rule, {
         },
       },
     },
+
+    // --- Named prop transparency (JSDoc @transparent {props}) ---
+    {
+      name: "transparent with named props extracts from children and attribute",
+      code: withComponents(
+        `
+        /** @transparent {off, children} */
+        function FeatureFlag({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {NavItem} */
+        function MyNav() {
+          return <FeatureFlag name="feat" off={<NavItem />}><NavItem /></FeatureFlag>;
+        }
+      `,
+        ["NavItem"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "transparent with single named prop (fallback only)",
+      code: withComponents(
+        `
+        /** @transparent {fallback} */
+        function LazyLoad({ fallback, children }: { fallback: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Spinner} */
+        function MySpinner() {
+          return <LazyLoad fallback={<Spinner />}><div>content</div></LazyLoad>;
+        }
+      `,
+        ["Spinner"]
+      ),
+      filename: "test.tsx",
+    },
+
+    // --- Named prop transparency via settings (object format) ---
+    {
+      name: "settings object format extracts from named prop and children",
+      code: withComponents(
+        `
+        /** @renders {CardWidget} */
+        function MyWidget() {
+          return <Toggle name="feat" off={<CardWidget />}><CardWidget /></Toggle>;
+        }
+      `,
+        ["CardWidget", "Toggle"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: [
+            { name: "Toggle", props: ["off", "children"] },
+          ],
+        },
+      },
+    },
   ],
   invalid: [
     // Wrong component returned
@@ -1548,6 +1608,91 @@ ruleTester.run("valid-render-return", rule, {
           data: {
             expected: "Header",
             actual: "Suspense",
+          },
+        },
+      ],
+    },
+
+    // --- Named prop transparency — invalid ---
+    {
+      name: "transparent named prop with wrong component in off prop",
+      code: withComponents(
+        `
+        /** @transparent {off, children} */
+        function FlagGate({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {NavItem} */
+        function BadNav() {
+          return <FlagGate name="feat" off={<Footer />}><NavItem /></FlagGate>;
+        }
+      `,
+        ["NavItem", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "NavItem",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    {
+      name: "transparent named prop with wrong component in children",
+      code: withComponents(
+        `
+        /** @transparent {off, children} */
+        function FlagSwitch({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {NavItem} */
+        function BadNavChildren() {
+          return <FlagSwitch name="feat" off={<NavItem />}><Sidebar /></FlagSwitch>;
+        }
+      `,
+        ["NavItem", "Sidebar"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "NavItem",
+            actual: "Sidebar",
+          },
+        },
+      ],
+    },
+    {
+      name: "settings object format with wrong component in named prop",
+      code: withComponents(
+        `
+        /** @renders {CardWidget} */
+        function BadWidget() {
+          return <Toggle name="feat" off={<Banner />}><CardWidget /></Toggle>;
+        }
+      `,
+        ["CardWidget", "Banner", "Toggle"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: [
+            { name: "Toggle", props: ["off", "children"] },
+          ],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "CardWidget",
+            actual: "Banner",
           },
         },
       ],

@@ -43,6 +43,14 @@ export interface ResolvedRendersAnnotation extends RendersAnnotation {
 export type ResolvedRenderMap = Map<string, ResolvedRendersAnnotation>;
 
 /**
+ * Represents a parsed @transparent annotation.
+ * propNames lists which props (including "children") to extract JSX from.
+ */
+export interface TransparentAnnotation {
+  propNames: string[];
+}
+
+/**
  * Component with its type identity
  */
 export interface ComponentTypeInfo {

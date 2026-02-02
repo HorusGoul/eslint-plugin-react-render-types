@@ -127,6 +127,8 @@ export default [
 
 Specify component names to treat as transparent wrappers without `@transparent` JSDoc. Useful for built-in components like `Suspense` or third-party components you can't annotate.
 
+String entries default to looking through `children`. Object entries specify which props to look through:
+
 ```javascript
 // eslint.config.js
 export default [
@@ -140,6 +142,7 @@ export default [
         additionalTransparentComponents: [
           "Suspense",
           "ErrorBoundary",
+          { name: "Flag", props: ["off", "children"] },
         ],
       },
     },
