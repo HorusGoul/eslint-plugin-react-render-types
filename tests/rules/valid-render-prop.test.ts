@@ -474,6 +474,49 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // --- Configured transparent components (settings) ---
+    {
+      name: "configured transparent wrapper in prop value",
+      code: withComponents(
+        `
+        interface ToolbarProps {
+          /** @renders {ToolbarButton} */
+          action: React.ReactNode;
+        }
+
+        <Toolbar action={<Suspense fallback={null}><ToolbarButton /></Suspense>} />;
+      `,
+        ["ToolbarButton", "Toolbar", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
+    {
+      name: "configured transparent wrapper in children",
+      code: withComponents(
+        `
+        interface AccordionProps {
+          /** @renders {AccordionItem} */
+          children: React.ReactNode;
+        }
+
+        <Accordion>
+          <Suspense fallback={null}><AccordionItem /></Suspense>
+        </Accordion>;
+      `,
+        ["AccordionItem", "Accordion", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
   ],
   invalid: [
     // Wrong component passed to prop
@@ -876,6 +919,68 @@ ruleTester.run("valid-render-prop", rule, {
             propName: "header",
             expected: "CardHeader",
             actual: "Footer",
+          },
+        },
+      ],
+    },
+    // --- Configured transparent components (settings) — invalid ---
+    {
+      name: "configured transparent wrapper with wrong child in prop",
+      code: withComponents(
+        `
+        interface ToolbarProps {
+          /** @renders {ToolbarButton} */
+          action: React.ReactNode;
+        }
+
+        <Toolbar action={<Suspense fallback={null}><Footer /></Suspense>} />;
+      `,
+        ["ToolbarButton", "Footer", "Toolbar", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "action",
+            expected: "ToolbarButton",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    {
+      name: "configured transparent wrapper with wrong child in children",
+      code: withComponents(
+        `
+        interface AccordionProps {
+          /** @renders {AccordionItem} */
+          children: React.ReactNode;
+        }
+
+        <Accordion>
+          <Suspense fallback={null}><Button /></Suspense>
+        </Accordion>;
+      `,
+        ["AccordionItem", "Button", "Accordion", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "AccordionItem",
+            actual: "Button",
           },
         },
       ],

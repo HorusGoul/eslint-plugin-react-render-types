@@ -40,6 +40,7 @@ src/
     jsdoc-parser.ts           Parses @renders/@transparent JSDoc annotations
     jsx-extraction.ts         Extracts component names from JSX (ternary, &&, .map())
     component-utils.ts        Component detection helpers
+    settings.ts               Reads shared ESLint settings (additionalTransparentComponents)
   types/
     index.ts                  RendersAnnotation, ResolvedRendersAnnotation, ComponentTypeInfo
 ```

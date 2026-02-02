@@ -160,6 +160,46 @@ If you encounter issues:
 
 3. **Performance issues** - Typed linting is slower than regular linting. Consider using `TIMING=1 eslint .` to identify bottlenecks. For large projects, see [typescript-eslint performance docs](https://typescript-eslint.io/troubleshooting/typed-linting/performance/)
 
+### Settings
+
+#### `additionalTransparentComponents`
+
+Specify component names that should be treated as transparent wrappers, allowing the plugin to "see through" them when validating `@renders` annotations. This is useful for built-in components like `Suspense` or third-party components you can't annotate with `@transparent`.
+
+```javascript
+// eslint.config.js
+export default [
+  // ...
+  {
+    settings: {
+      "react-render-types": {
+        additionalTransparentComponents: [
+          "Suspense",
+          "ErrorBoundary",
+        ],
+      },
+    },
+  },
+];
+```
+
+With this setting, the plugin looks through configured components to validate their children:
+
+```tsx
+/** @renders {Header} */
+function MyHeader() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <Header />  {/* ✓ Plugin validates Header, not Suspense */}
+    </Suspense>
+  );
+}
+```
+
+For member expressions like `<React.Suspense>`, use the dotted form: `"React.Suspense"`.
+
+These work alongside `@transparent` JSDoc annotations — both sources are merged.
+
 ## JSDoc Syntax
 
 ### `@renders {Component}` - Required

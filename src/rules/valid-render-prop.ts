@@ -7,6 +7,7 @@ import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import type { RendersAnnotation, ResolvedRendersAnnotation, ResolvedRenderMap } from "../types/index.js";
+import { getPluginSettings } from "../utils/settings.js";
 
 type MessageIds = "invalidRenderProp" | "invalidRenderChildren";
 
@@ -53,6 +54,14 @@ export default createRule<[], MessageIds>({
 
     // Track components marked as @transparent
     const transparentComponents = new Set<string>();
+
+    // Seed from shared settings
+    const { additionalTransparentComponents } = getPluginSettings(context.settings);
+    if (additionalTransparentComponents) {
+      for (const name of additionalTransparentComponents) {
+        transparentComponents.add(name);
+      }
+    }
 
     // Queue JSX elements for validation in Program:exit
     const jsxElementsToValidate: TSESTree.JSXElement[] = [];

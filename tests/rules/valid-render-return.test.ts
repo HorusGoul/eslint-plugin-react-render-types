@@ -849,6 +849,66 @@ ruleTester.run("valid-render-return", rule, {
       ),
       filename: "test.tsx",
     },
+    // --- Configured transparent components (settings) ---
+    {
+      name: "configured transparent component wrapping correct return",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Suspense fallback={null}><Header /></Suspense>;
+        }
+      `,
+        ["Header", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
+    {
+      name: "configured and JSDoc transparent coexist",
+      code: withComponents(
+        `
+        /** @transparent */
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        /** @renders {Header} */
+        function MyHeader() {
+          return <Suspense fallback={null}><Wrapper><Header /></Wrapper></Suspense>;
+        }
+      `,
+        ["Header", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
+    {
+      name: "configured transparent with nested correct components",
+      code: withComponents(
+        `
+        /** @renders* {MenuItem} */
+        function MyMenu({ items }: { items: string[] }) {
+          return <Suspense fallback={null}><>{items.map(i => <MenuItem key={i} />)}</></Suspense>;
+        }
+      `,
+        ["MenuItem", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
   ],
   invalid: [
     // Wrong component returned
@@ -1438,6 +1498,56 @@ ruleTester.run("valid-render-return", rule, {
           data: {
             expected: "MenuItem",
             actual: "Button",
+          },
+        },
+      ],
+    },
+    // --- Configured transparent components (settings) — invalid ---
+    {
+      name: "configured transparent wrapper with wrong child",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        function MyBadHeader() {
+          return <Suspense fallback={null}><Footer /></Suspense>;
+        }
+      `,
+        ["Header", "Footer", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    {
+      name: "Suspense is not transparent without setting",
+      code: withComponents(
+        `
+        /** @renders {Header} */
+        function MyHeaderNoSetting() {
+          return <Suspense fallback={null}><Header /></Suspense>;
+        }
+      `,
+        ["Header", "Suspense"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Suspense",
           },
         },
       ],

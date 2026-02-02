@@ -7,6 +7,7 @@ import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import type { RendersAnnotation, ResolvedRenderMap } from "../types/index.js";
+import { getPluginSettings } from "../utils/settings.js";
 
 type MessageIds = "invalidRenderReturn";
 
@@ -46,6 +47,14 @@ export default createRule<[], MessageIds>({
 
     // Track components marked as @transparent
     const transparentComponents = new Set<string>();
+
+    // Seed from shared settings
+    const { additionalTransparentComponents } = getPluginSettings(context.settings);
+    if (additionalTransparentComponents) {
+      for (const name of additionalTransparentComponents) {
+        transparentComponents.add(name);
+      }
+    }
 
     // Get typed parser services (required for this rule)
     const parserServices = ESLintUtils.getParserServices(context);
