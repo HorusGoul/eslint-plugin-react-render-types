@@ -125,7 +125,7 @@ export default [
 
 ### `additionalTransparentComponents`
 
-Specify component names to treat as transparent wrappers without `@transparent` JSDoc. Useful for built-in components like `Suspense` or third-party components you can't annotate.
+Specify component names to treat as transparent wrappers without `@transparent` JSDoc. Useful for built-in components like `Suspense` or third-party components you can't annotate. Note that `@transparent` annotations are resolved cross-file automatically, so settings are only needed for components without JSDoc.
 
 String entries default to looking through `children`. Object entries specify which props to look through:
 
@@ -152,7 +152,7 @@ export default [
 
 For member expressions like `<React.Suspense>`, use the dotted form: `"React.Suspense"`.
 
-These merge with `@transparent` JSDoc annotations — both sources are combined.
+These merge with `@transparent` JSDoc annotations — both sources are combined. `@transparent` annotations work cross-file automatically via TypeScript's type checker.
 
 ## Troubleshooting
 

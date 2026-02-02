@@ -5,8 +5,9 @@ import type {
   ResolvedRendersAnnotation,
   ResolvedRenderMap,
   ComponentTypeId,
+  TransparentAnnotation,
 } from "../types/index.js";
-import { parseRendersAnnotation } from "./jsdoc-parser.js";
+import { parseRendersAnnotation, parseTransparentAnnotation } from "./jsdoc-parser.js";
 import ts from "typescript";
 
 type RenderMap = Map<string, RendersAnnotation>;
@@ -23,6 +24,7 @@ export interface CrossFileResolverOptions {
  * This is module-scoped and persists during a lint run.
  */
 const annotationCache = new Map<string, RendersAnnotation | null>();
+const transparentAnnotationCache = new Map<string, TransparentAnnotation | null>();
 
 /**
  * Clear the annotation cache.
@@ -30,6 +32,7 @@ const annotationCache = new Map<string, RendersAnnotation | null>();
  */
 export function clearAnnotationCache(): void {
   annotationCache.clear();
+  transparentAnnotationCache.clear();
 }
 
 /**
@@ -681,11 +684,159 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
     return result.size > 0 ? result : null;
   }
 
+  /**
+   * Get @transparent annotation from a TypeScript declaration node
+   */
+  function getTransparentAnnotationFromDeclaration(
+    declaration: ts.Declaration
+  ): TransparentAnnotation | null {
+    // Handle variable declarations (const Foo = ...)
+    if (ts.isVariableDeclaration(declaration)) {
+      const varDeclList = declaration.parent;
+      if (ts.isVariableDeclarationList(varDeclList)) {
+        const varStatement = varDeclList.parent;
+        if (ts.isVariableStatement(varStatement)) {
+          const jsDoc = getJSDocText(varStatement);
+          if (jsDoc) {
+            return parseTransparentAnnotation(jsDoc);
+          }
+        }
+      }
+    }
+
+    // Handle function declarations
+    if (ts.isFunctionDeclaration(declaration)) {
+      const jsDoc = getJSDocText(declaration);
+      if (jsDoc) {
+        return parseTransparentAnnotation(jsDoc);
+      }
+    }
+
+    // Handle export assignment (export default ...)
+    if (ts.isExportAssignment(declaration)) {
+      const jsDoc = getJSDocText(declaration);
+      if (jsDoc) {
+        return parseTransparentAnnotation(jsDoc);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get @transparent annotation for an imported component by name.
+   * Returns the TransparentAnnotation if the imported component has @transparent.
+   */
+  function getExternalTransparentAnnotation(
+    componentName: string,
+    importDeclaration: ts.ImportDeclaration
+  ): TransparentAnnotation | null {
+    const moduleSpecifier = importDeclaration.moduleSpecifier;
+    if (!ts.isStringLiteral(moduleSpecifier)) {
+      return null;
+    }
+
+    // Resolve the module to its source file
+    const importSourceFile = importDeclaration.getSourceFile();
+    const resolvedModule = ts.resolveModuleName(
+      moduleSpecifier.text,
+      importSourceFile.fileName,
+      program.getCompilerOptions(),
+      ts.sys
+    );
+
+    if (
+      !resolvedModule.resolvedModule ||
+      !resolvedModule.resolvedModule.resolvedFileName
+    ) {
+      return null;
+    }
+
+    const targetFilePath = resolvedModule.resolvedModule.resolvedFileName;
+
+    // Check cache first
+    const cacheKey = `${targetFilePath}:${componentName}`;
+    if (transparentAnnotationCache.has(cacheKey)) {
+      return transparentAnnotationCache.get(cacheKey) ?? null;
+    }
+
+    // Get the source file
+    const targetSourceFile = program.getSourceFile(targetFilePath);
+    if (!targetSourceFile) {
+      transparentAnnotationCache.set(cacheKey, null);
+      return null;
+    }
+
+    // Find the export symbol for this component
+    const symbol = typeChecker.getSymbolAtLocation(moduleSpecifier);
+    if (!symbol) {
+      transparentAnnotationCache.set(cacheKey, null);
+      return null;
+    }
+
+    const exports = typeChecker.getExportsOfModule(symbol);
+    const exportSymbol = exports.find((exp) => exp.getName() === componentName);
+
+    if (!exportSymbol) {
+      transparentAnnotationCache.set(cacheKey, null);
+      return null;
+    }
+
+    // Resolve to original declaration
+    const declaration = resolveSymbolToDeclaration(exportSymbol);
+    if (!declaration) {
+      transparentAnnotationCache.set(cacheKey, null);
+      return null;
+    }
+
+    const annotation = getTransparentAnnotationFromDeclaration(declaration);
+    transparentAnnotationCache.set(cacheKey, annotation);
+    return annotation;
+  }
+
+  /**
+   * Resolve transparent components from both local annotations and imports.
+   * Local entries are passed in (collected during first AST pass).
+   * Imported @transparent components are discovered via TypeScript's type checker.
+   * Returns a Map<string, Set<string>> keyed by local name for extraction functions.
+   */
+  function resolveTransparentComponents(
+    localTransparentComponents: Map<string, Set<string>>
+  ): Map<string, Set<string>> {
+    const resolvedMap = new Map<string, Set<string>>();
+
+    // Include local entries
+    for (const [name, props] of localTransparentComponents) {
+      resolvedMap.set(name, props);
+    }
+
+    // Discover imported @transparent components
+    if (currentSourceFile) {
+      const imports = collectImports(currentSourceFile);
+      for (const [localName, importInfo] of imports) {
+        // Skip if already registered locally
+        if (resolvedMap.has(localName)) continue;
+
+        const annotation = getExternalTransparentAnnotation(
+          importInfo.originalName,
+          importInfo.importDeclaration
+        );
+
+        if (annotation) {
+          resolvedMap.set(localName, new Set(annotation.propNames));
+        }
+      }
+    }
+
+    return resolvedMap;
+  }
+
   return {
     getComponentTypeId,
     buildResolvedRenderMap,
     expandTypeAliases,
     resolveTypeAliasToComponentNames,
     getExternalPropAnnotations,
+    resolveTransparentComponents,
   };
 }

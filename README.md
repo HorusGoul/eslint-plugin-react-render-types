@@ -221,7 +221,7 @@ interface NavProps {
 
 For member expressions like `<React.Suspense>`, use the dotted form: `"React.Suspense"`.
 
-These work alongside `@transparent` JSDoc annotations — both sources are merged.
+These work alongside `@transparent` JSDoc annotations — both sources are merged. Note that `@transparent` annotations are resolved cross-file automatically (the plugin discovers them on imported components via TypeScript's type checker), so settings are only needed for components you can't annotate with JSDoc (e.g., React built-ins like `Suspense`).
 
 ## JSDoc Syntax
 
@@ -556,6 +556,8 @@ function MyHeader() {
 ```
 
 Without `@transparent`, the plugin would see `Wrapper` being returned and report an error because `Wrapper` is not `Header`.
+
+`@transparent` annotations work **cross-file** — when you import a transparent component from another file, the plugin automatically discovers its annotation via TypeScript's type checker. No settings configuration is needed for components you control.
 
 ### Nested Transparent Wrappers
 

@@ -16,10 +16,7 @@ export default tseslint.config(
     },
     settings: {
       "react-render-types": {
-        additionalTransparentComponents: [
-          "Suspense",
-          { name: "Flag", props: ["off", "children"] },
-        ],
+        additionalTransparentComponents: ["Suspense"],
       },
     },
   },
