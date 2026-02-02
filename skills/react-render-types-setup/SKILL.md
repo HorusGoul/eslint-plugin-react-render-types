@@ -1,6 +1,6 @@
 ---
 name: react-render-types-setup
-description: "Install and configure eslint-plugin-react-render-types in a TypeScript React project. Use when: (1) adding eslint-plugin-react-render-types to a project, (2) configuring ESLint flat config with typed linting for @renders support, (3) troubleshooting typed linting errors or plugin configuration, (4) setting up projectService or tsconfig for the plugin, or (5) understanding which rules to enable and what they do."
+description: "Install and configure eslint-plugin-react-render-types in a TypeScript React project. Use when: (1) adding eslint-plugin-react-render-types to a project, (2) configuring ESLint flat config with typed linting for @renders support, (3) troubleshooting typed linting errors or plugin configuration, (4) setting up projectService or tsconfig for the plugin, (5) understanding which rules to enable and what they do, or (6) suppressing unused import warnings in the IDE for @renders-referenced components."
 ---
 
 # React Render Types — Setup
@@ -154,6 +154,26 @@ For member expressions like `<React.Suspense>`, use the dotted form: `"React.Sus
 
 These merge with `@transparent` JSDoc annotations — both sources are combined. `@transparent` annotations work cross-file automatically via TypeScript's type checker.
 
+## IDE Integration: Unused Import Suppression
+
+When a component is imported only for use in a `@renders` annotation, TypeScript's `noUnusedLocals` may flag it as unused in the IDE. The plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
+
+Add to `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "plugins": [
+      { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+    ]
+  }
+}
+```
+
+Then restart the TypeScript server (VS Code: `Ctrl+Shift+P` → "TypeScript: Restart TS Server").
+
+**Important**: This is IDE-only — it runs in the editor's TypeScript language service, not during `tsc` CLI builds. For CI, use `@typescript-eslint/no-unused-vars` with the `renders-uses-vars` rule.
+
 ## Troubleshooting
 
 | Error | Fix |
@@ -162,4 +182,5 @@ These merge with `@transparent` JSDoc annotations — both sources are combined.
 | "Cannot read file tsconfig.json" | Check `project` path is correct relative to ESLint CWD |
 | "File is not part of a TypeScript project" | Add file to tsconfig `include`, or use `projectService: { allowDefaultProject: ['*.tsx'] }` |
 | `no-unused-vars` on `@renders` imports | Ensure `renders-uses-vars` rule is enabled (included in `recommended`) |
+| IDE shows unused import for `@renders` reference | Add the language service plugin to `tsconfig.json` `compilerOptions.plugins` (see IDE Integration above) |
 | Performance issues | Run `TIMING=1 eslint .` — see [typescript-eslint perf docs](https://typescript-eslint.io/troubleshooting/typed-linting/performance/) |
