@@ -1,5 +1,36 @@
 # eslint-plugin-react-render-types
 
+## 0.5.0
+
+### Minor Changes
+
+- [#10](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/10) [`dae9095`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/dae90951f278d5d15eb2ef8736a3f33a759e6e20) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add `additionalTransparentComponents` shared setting with named prop support
+
+  - **Configurable transparent components**: New ESLint shared setting `settings["react-render-types"].additionalTransparentComponents` lets users specify component names (e.g., `"Suspense"`, `"ErrorBoundary"`) to treat as transparent without requiring `@transparent` JSDoc annotations.
+  - **Named prop transparency**: Use `@transparent {off, children}` JSDoc syntax or object format in settings (`{ name: "Flag", props: ["off", "children"] }`) to specify which props the plugin should look through — not just `children`.
+  - **Both rules supported**: Works with `valid-render-return` and `valid-render-prop` — the plugin looks through configured components to validate their children and named props.
+  - **Member expression support**: Use dotted names like `"React.Suspense"` for member expression JSX.
+  - **Merges with JSDoc**: Configured names are merged with `@transparent` annotations found during AST traversal.
+
+- [`bdce5ca`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/bdce5caf44ff91c4f66ca7b7dec2beadbf8213a2) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add cross-file prop annotation resolution for `valid-render-prop`
+
+  - **Cross-file `@renders` on props**: The rule now resolves `@renders` annotations on props defined in external files. Previously, only annotations in the current file were checked.
+  - **Source-context type resolution**: Target type IDs are resolved from the file where the annotation is defined, so consumers don't need to import the target types (e.g., using `<Sidebar>` with `@renders* {NavItem}` children works without importing `NavItem`).
+  - **External render map resolution**: Imported component annotations (`@renders {NavItem}` on `NavLink`) now resolve their target type IDs from the source file's scope, fixing false positives in cross-file validation chains.
+
+- [#11](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/11) [`d7bcc39`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/d7bcc39030d8e68b9f71428404d37dcc94902f27) Thanks [@HorusGoul](https://github.com/HorusGoul)! - @transparent annotations now work cross-file. Imported transparent components are automatically discovered via TypeScript's type checker, so settings configuration is only needed for components without JSDoc (e.g., React built-ins like Suspense).
+
+- [#8](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/8) [`7df8c49`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/7df8c498f994f6ea8cb27124686d8c0027047d2b) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add expression extraction and `@renders!` unchecked flag
+
+  - **Expression extraction**: The plugin now analyzes expressions inside transparent wrappers and return statements, including ternaries (`cond ? <A /> : <B />`), logical AND (`cond && <A />`), `.map()`/`.flatMap()` callbacks, and JSX fragment children.
+  - **`@renders!` unchecked flag**: Skip return validation when the plugin can't statically analyze a return value. Composable with existing modifiers: `@renders!`, `@renders?!`, `@renders*!`. The component still declares its render type for chain resolution.
+
+- [#5](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/5) [`0c8a02c`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/0c8a02c54afe51ad4b291e894040a782480f1213) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add union type support and type alias resolution for `@renders` annotations.
+
+  **Union Types:** Use `@renders {Header | Footer}` to declare that a component may render any of the specified types. Union syntax works with all modifiers (`@renders?`, `@renders*`) and across all rules (`valid-render-return`, `valid-render-prop`, `renders-uses-vars`).
+
+  **Type Alias Unions:** Reference a TypeScript type alias in `@renders` and the plugin resolves it at lint time. For example, `type LayoutSlot = Header | Footer` can be used as `@renders {LayoutSlot}`, and the plugin expands it to validate against `Header | Footer`.
+
 ## 0.4.0
 
 ### Minor Changes
