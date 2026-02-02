@@ -109,7 +109,7 @@ function init(modules: { typescript: typeof ts }) {
           messageText:
             `'${name}' is referenced in a @renders annotation but noUnusedLocals treats it as unused. ` +
             `Disable noUnusedLocals in tsconfig.json and use the ESLint no-unused-vars rule instead.`,
-          category: tsModule.DiagnosticCategory.Warning,
+          category: tsModule.DiagnosticCategory.Error,
         };
       });
     };
