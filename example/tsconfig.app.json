@@ -7,6 +7,9 @@
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
+    "plugins": [
+      { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+    ],
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
