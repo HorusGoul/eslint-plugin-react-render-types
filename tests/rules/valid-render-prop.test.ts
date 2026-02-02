@@ -474,6 +474,117 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // --- Configured transparent components (settings) ---
+    {
+      name: "configured transparent wrapper in prop value",
+      code: withComponents(
+        `
+        interface ToolbarProps {
+          /** @renders {ToolbarButton} */
+          action: React.ReactNode;
+        }
+
+        <Toolbar action={<Suspense fallback={null}><ToolbarButton /></Suspense>} />;
+      `,
+        ["ToolbarButton", "Toolbar", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
+    {
+      name: "configured transparent wrapper in children",
+      code: withComponents(
+        `
+        interface AccordionProps {
+          /** @renders {AccordionItem} */
+          children: React.ReactNode;
+        }
+
+        <Accordion>
+          <Suspense fallback={null}><AccordionItem /></Suspense>
+        </Accordion>;
+      `,
+        ["AccordionItem", "Accordion", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
+
+    // --- Named prop transparency (JSDoc @transparent {props}) ---
+    {
+      name: "transparent named prop extracts from off prop and children",
+      code: withComponents(
+        `
+        /** @transparent {off, children} */
+        function FeatureGate({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface SidebarProps {
+          /** @renders {SidebarItem} */
+          items: React.ReactNode;
+        }
+
+        <Sidebar items={<FeatureGate name="feat" off={<SidebarItem />}><SidebarItem /></FeatureGate>} />;
+      `,
+        ["SidebarItem", "Sidebar"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "transparent named prop in children context",
+      code: withComponents(
+        `
+        /** @transparent {off, children} */
+        function FlagComp({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface ListProps {
+          /** @renders {ListItem} */
+          children: React.ReactNode;
+        }
+
+        <List>
+          <FlagComp name="feat" off={<ListItem />}><ListItem /></FlagComp>
+        </List>;
+      `,
+        ["ListItem", "List"]
+      ),
+      filename: "test.tsx",
+    },
+
+    // --- Named prop transparency via settings (object format) ---
+    {
+      name: "settings object format transparent in prop value",
+      code: withComponents(
+        `
+        interface PanelProps {
+          /** @renders {PanelCard} */
+          content: React.ReactNode;
+        }
+
+        <Panel content={<Switch name="feat" off={<PanelCard />}><PanelCard /></Switch>} />;
+      `,
+        ["PanelCard", "Panel", "Switch"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: [
+            { name: "Switch", props: ["off", "children"] },
+          ],
+        },
+      },
+    },
   ],
   invalid: [
     // Wrong component passed to prop
@@ -876,6 +987,163 @@ ruleTester.run("valid-render-prop", rule, {
             propName: "header",
             expected: "CardHeader",
             actual: "Footer",
+          },
+        },
+      ],
+    },
+    // --- Configured transparent components (settings) — invalid ---
+    {
+      name: "configured transparent wrapper with wrong child in prop",
+      code: withComponents(
+        `
+        interface ToolbarProps {
+          /** @renders {ToolbarButton} */
+          action: React.ReactNode;
+        }
+
+        <Toolbar action={<Suspense fallback={null}><Footer /></Suspense>} />;
+      `,
+        ["ToolbarButton", "Footer", "Toolbar", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "action",
+            expected: "ToolbarButton",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    {
+      name: "configured transparent wrapper with wrong child in children",
+      code: withComponents(
+        `
+        interface AccordionProps {
+          /** @renders {AccordionItem} */
+          children: React.ReactNode;
+        }
+
+        <Accordion>
+          <Suspense fallback={null}><Button /></Suspense>
+        </Accordion>;
+      `,
+        ["AccordionItem", "Button", "Accordion", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "AccordionItem",
+            actual: "Button",
+          },
+        },
+      ],
+    },
+
+    // --- Named prop transparency — invalid ---
+    {
+      name: "transparent named prop with wrong component in off prop",
+      code: withComponents(
+        `
+        /** @transparent {off, children} */
+        function FlagGate({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface SidebarProps {
+          /** @renders {SidebarItem} */
+          items: React.ReactNode;
+        }
+
+        <Sidebar items={<FlagGate name="feat" off={<Banner />}><SidebarItem /></FlagGate>} />;
+      `,
+        ["SidebarItem", "Banner", "Sidebar"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "items",
+            expected: "SidebarItem",
+            actual: "Banner",
+          },
+        },
+      ],
+    },
+    {
+      name: "transparent named prop with wrong component in children context",
+      code: withComponents(
+        `
+        /** @transparent {off, children} */
+        function FlagToggle({ name, off, children }: { name: string; off: React.ReactNode; children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        interface ListProps {
+          /** @renders {ListItem} */
+          children: React.ReactNode;
+        }
+
+        <List>
+          <FlagToggle name="feat" off={<ListItem />}><Banner /></FlagToggle>
+        </List>;
+      `,
+        ["ListItem", "Banner", "List"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "ListItem",
+            actual: "Banner",
+          },
+        },
+      ],
+    },
+    {
+      name: "settings object format with wrong component in named prop",
+      code: withComponents(
+        `
+        interface PanelProps {
+          /** @renders {PanelCard} */
+          content: React.ReactNode;
+        }
+
+        <Panel content={<Switch name="feat" off={<Banner />}><PanelCard /></Switch>} />;
+      `,
+        ["PanelCard", "Banner", "Panel", "Switch"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: [
+            { name: "Switch", props: ["off", "children"] },
+          ],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "content",
+            expected: "PanelCard",
+            actual: "Banner",
           },
         },
       ],

@@ -14,6 +14,14 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    settings: {
+      "react-render-types": {
+        additionalTransparentComponents: [
+          "Suspense",
+          { name: "Flag", props: ["off", "children"] },
+        ],
+      },
+    },
   },
   { ignores: ["eslint.config.js", "vite.config.ts"] },
 );

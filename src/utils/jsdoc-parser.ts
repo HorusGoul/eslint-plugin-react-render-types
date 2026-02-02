@@ -1,4 +1,4 @@
-import type { RendersAnnotation } from "../types/index.js";
+import type { RendersAnnotation, TransparentAnnotation } from "../types/index.js";
 
 /**
  * Regex to match @renders annotation with optional union types
@@ -55,19 +55,69 @@ function parseUnionType(typeExpression: string): string[] | null {
  * - @renders {Header | Footer} (union types)
  */
 /**
- * Regex to match @transparent annotation
- * Matches @transparent as a standalone tag (not part of another word)
+ * Regex to match @transparent annotation with optional prop list.
+ * Groups:
+ * 1. Prop list content inside braces (optional)
+ *
+ * Matches:
+ * - @transparent                  -> defaults to ["children"]
+ * - @transparent {children}       -> ["children"]
+ * - @transparent {off, children}  -> ["off", "children"]
  */
-const TRANSPARENT_REGEX = /(?:^|[^a-zA-Z@])@transparent\b/;
+const TRANSPARENT_REGEX =
+  /(?:^|[^a-zA-Z@])@transparent(?:\s*\{\s*([^}]*)\s*\}|\b)/;
+
+const PROP_NAME_REGEX = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 /**
- * Check if a comment contains the @transparent annotation
+ * Parse the @transparent annotation from a comment.
+ * Returns a TransparentAnnotation with the prop names to extract from,
+ * or null if the annotation is not present.
+ * Bare @transparent defaults to { propNames: ["children"] }.
  */
-export function parseTransparentAnnotation(comment: string): boolean {
+export function parseTransparentAnnotation(
+  comment: string
+): TransparentAnnotation | null {
   if (!comment) {
-    return false;
+    return null;
   }
-  return TRANSPARENT_REGEX.test(comment);
+
+  const match = comment.match(TRANSPARENT_REGEX);
+  if (!match) {
+    return null;
+  }
+
+  const [, propsContent] = match;
+
+  if (propsContent === undefined) {
+    // Bare @transparent -> defaults to children
+    return { propNames: ["children"] };
+  }
+
+  const trimmed = propsContent.trim();
+  if (trimmed.length === 0) {
+    // @transparent {} -> defaults to children
+    return { propNames: ["children"] };
+  }
+
+  // Parse comma-separated prop names
+  const propNames = trimmed
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (propNames.length === 0) {
+    return { propNames: ["children"] };
+  }
+
+  // Validate prop names are valid identifiers
+  for (const name of propNames) {
+    if (!PROP_NAME_REGEX.test(name)) {
+      return null;
+    }
+  }
+
+  return { propNames };
 }
 
 export function parseRendersAnnotation(

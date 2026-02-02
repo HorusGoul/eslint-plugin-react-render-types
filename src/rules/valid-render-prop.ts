@@ -7,6 +7,7 @@ import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import type { RendersAnnotation, ResolvedRendersAnnotation, ResolvedRenderMap } from "../types/index.js";
+import { getPluginSettings } from "../utils/settings.js";
 
 type MessageIds = "invalidRenderProp" | "invalidRenderChildren";
 
@@ -51,8 +52,14 @@ export default createRule<[], MessageIds>({
       filename: context.filename,
     });
 
-    // Track components marked as @transparent
-    const transparentComponents = new Set<string>();
+    // Track components marked as @transparent: name → prop names to extract from
+    const transparentComponents = new Map<string, Set<string>>();
+
+    // Seed from shared settings
+    const { transparentComponentsMap } = getPluginSettings(context.settings);
+    for (const [name, props] of transparentComponentsMap) {
+      transparentComponents.set(name, props);
+    }
 
     // Queue JSX elements for validation in Program:exit
     const jsxElementsToValidate: TSESTree.JSXElement[] = [];
@@ -177,8 +184,9 @@ export default createRule<[], MessageIds>({
         for (const comment of comments) {
           const text =
             comment.type === "Block" ? `/*${comment.value}*/` : comment.value;
-          if (parseTransparentAnnotation(text)) {
-            transparentComponents.add(componentName);
+          const ta = parseTransparentAnnotation(text);
+          if (ta) {
+            transparentComponents.set(componentName, new Set(ta.propNames));
             break;
           }
         }

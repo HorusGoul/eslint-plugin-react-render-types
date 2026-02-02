@@ -129,14 +129,86 @@ function extractJSXFromBlock(
 }
 
 /**
- * Extract child element names from a JSX element, looking through
- * transparent wrappers and expression containers.
+ * Extract JSX component names from a JSX attribute value.
+ * Handles:
+ * - JSX elements: prop={<Header />}
+ * - Expression containers with JSX: prop={condition ? <A /> : <B />}
+ * - Transparent wrappers in attribute values
  */
-export function extractChildElementNames(
+function extractJSXFromAttribute(
+  attr: TSESTree.JSXAttribute,
+  transparentComponents: Map<string, Set<string>>,
+  visited: Set<string>,
+  maxDepth: number
+): string[] {
+  if (!attr.value) return [];
+
+  if (attr.value.type === "JSXExpressionContainer") {
+    const expr = attr.value.expression;
+    if (expr.type === "JSXElement") {
+      return extractFromJSXElement(
+        expr,
+        transparentComponents,
+        visited,
+        maxDepth
+      );
+    }
+    if (expr.type !== "JSXEmptyExpression") {
+      return extractJSXFromExpression(expr, maxDepth);
+    }
+  } else if (attr.value.type === "JSXElement") {
+    return extractFromJSXElement(
+      attr.value,
+      transparentComponents,
+      visited,
+      maxDepth
+    );
+  }
+
+  return [];
+}
+
+/**
+ * Extract component names from a JSX element, looking through transparent
+ * wrappers if applicable. If the element is transparent, extracts from
+ * whichever props are configured for that component.
+ */
+function extractFromJSXElement(
   jsxElement: TSESTree.JSXElement,
-  transparentComponents: Set<string>,
-  visited: Set<string> = new Set(),
-  maxDepth: number = 10
+  transparentComponents: Map<string, Set<string>>,
+  visited: Set<string>,
+  maxDepth: number
+): string[] {
+  const name = getJSXElementName(jsxElement);
+  if (!name) return [];
+
+  const propNames = transparentComponents.get(name);
+  if (!propNames) {
+    // Not transparent — return the element name itself
+    return [name];
+  }
+
+  // Transparent — extract from configured props
+  return extractFromTransparentElement(
+    jsxElement,
+    propNames,
+    transparentComponents,
+    visited,
+    maxDepth
+  );
+}
+
+/**
+ * Extract component names from a transparent element's configured props.
+ * For "children", extracts from the element's JSX children.
+ * For other prop names, extracts from the matching JSX attribute values.
+ */
+function extractFromTransparentElement(
+  jsxElement: TSESTree.JSXElement,
+  propNames: Set<string>,
+  transparentComponents: Map<string, Set<string>>,
+  visited: Set<string>,
+  maxDepth: number
 ): string[] {
   if (maxDepth <= 0) return [];
 
@@ -148,21 +220,100 @@ export function extractChildElementNames(
 
   const results: string[] = [];
 
-  for (const child of jsxElement.children) {
-    if (child.type === "JSXElement") {
-      const childName = getJSXElementName(child);
-      if (childName && transparentComponents.has(childName)) {
+  // Extract from children if "children" is in propNames
+  if (propNames.has("children")) {
+    for (const child of jsxElement.children) {
+      if (child.type === "JSXElement") {
         results.push(
-          ...extractChildElementNames(
+          ...extractFromJSXElement(
             child,
             transparentComponents,
             new Set(visited),
             maxDepth - 1
           )
         );
-      } else if (childName) {
-        results.push(childName);
+      } else if (
+        child.type === "JSXExpressionContainer" &&
+        child.expression.type !== "JSXEmptyExpression"
+      ) {
+        results.push(
+          ...extractJSXFromExpression(child.expression, maxDepth - 1)
+        );
       }
+    }
+  }
+
+  // Extract from named prop attributes
+  for (const attr of jsxElement.openingElement.attributes) {
+    if (attr.type !== "JSXAttribute" || attr.name.type !== "JSXIdentifier") {
+      continue;
+    }
+    const attrName = attr.name.name;
+    if (attrName === "children" || !propNames.has(attrName)) {
+      continue;
+    }
+    results.push(
+      ...extractJSXFromAttribute(
+        attr,
+        transparentComponents,
+        new Set(visited),
+        maxDepth - 1
+      )
+    );
+  }
+
+  return results;
+}
+
+/**
+ * Extract child element names from a JSX element, looking through
+ * transparent wrappers and expression containers.
+ *
+ * transparentComponents maps component name → set of prop names to extract from.
+ */
+export function extractChildElementNames(
+  jsxElement: TSESTree.JSXElement,
+  transparentComponents: Map<string, Set<string>>,
+  visited: Set<string> = new Set(),
+  maxDepth: number = 10
+): string[] {
+  if (maxDepth <= 0) return [];
+
+  const elementName = getJSXElementName(jsxElement);
+
+  const propNames = elementName
+    ? transparentComponents.get(elementName)
+    : undefined;
+
+  // If this element is transparent, extract from its configured props
+  if (propNames) {
+    return extractFromTransparentElement(
+      jsxElement,
+      propNames,
+      transparentComponents,
+      visited,
+      maxDepth
+    );
+  }
+
+  // Non-transparent — extract from children only (backward compat path for direct calls)
+  if (elementName) {
+    if (visited.has(elementName)) return [];
+    visited.add(elementName);
+  }
+
+  const results: string[] = [];
+
+  for (const child of jsxElement.children) {
+    if (child.type === "JSXElement") {
+      results.push(
+        ...extractFromJSXElement(
+          child,
+          transparentComponents,
+          new Set(visited),
+          maxDepth - 1
+        )
+      );
     } else if (
       child.type === "JSXExpressionContainer" &&
       child.expression.type !== "JSXEmptyExpression"

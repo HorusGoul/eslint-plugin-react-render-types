@@ -13,6 +13,7 @@ import { PageLayout } from "@/design-system/layout/PageLayout";
 import { PageHeader } from "@/design-system/layout/PageHeader";
 import { PageContent } from "@/design-system/layout/PageContent";
 import { Sidebar } from "@/design-system/nav/Sidebar";
+import { Flag } from "@/design-system/util/Flag";
 
 // ---------------------------------------------------------------------------
 // 1. valid-render-return: Wrong component returned
@@ -72,7 +73,22 @@ function BadUnionCard() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. valid-renders-jsdoc: Malformed annotations
+// 4. valid-render-prop: Wrong component in transparent named prop
+// ---------------------------------------------------------------------------
+
+function BadFlagUsage() {
+  return (
+    <DashboardGrid>
+      {/* ERROR: NavItem is not DashboardCard — Flag is transparent, off prop is checked */}
+      <Flag name="new-feature" off={<NavItem label="Wrong" />}>
+        <StatCard title="OK" value="1" change={0} />
+      </Flag>
+    </DashboardGrid>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 5. valid-renders-jsdoc: Malformed annotations
 // ---------------------------------------------------------------------------
 
 /** @renders DashboardCard */
@@ -99,6 +115,7 @@ void WrongCard;
 void NullCard;
 void BadChildrenUsage;
 void BadUnionCard;
+void BadFlagUsage;
 void MissingBraces;
 void LowercaseName;
 void EmptyBraces;

@@ -6,7 +6,8 @@ import { getJSXElementName, isComponentName } from "../utils/component-utils.js"
 import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx-extraction.js";
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
-import type { RendersAnnotation, ResolvedRenderMap } from "../types/index.js";
+import type { RendersAnnotation, TransparentAnnotation, ResolvedRenderMap } from "../types/index.js";
+import { getPluginSettings } from "../utils/settings.js";
 
 type MessageIds = "invalidRenderReturn";
 
@@ -44,8 +45,14 @@ export default createRule<[], MessageIds>({
       componentName: string;
     }> = [];
 
-    // Track components marked as @transparent
-    const transparentComponents = new Set<string>();
+    // Track components marked as @transparent: name → prop names to extract from
+    const transparentComponents = new Map<string, Set<string>>();
+
+    // Seed from shared settings
+    const { transparentComponentsMap } = getPluginSettings(context.settings);
+    for (const [name, props] of transparentComponentsMap) {
+      transparentComponents.set(name, props);
+    }
 
     // Get typed parser services (required for this rule)
     const parserServices = ESLintUtils.getParserServices(context);
@@ -180,9 +187,9 @@ export default createRule<[], MessageIds>({
     }
 
     /**
-     * Check if a function node has a @transparent annotation
+     * Get the @transparent annotation from a function node's leading comments
      */
-    function hasTransparentAnnotation(node: FunctionNode): boolean {
+    function getTransparentAnnotation(node: FunctionNode): TransparentAnnotation | null {
       let nodeToCheck: TSESTree.Node =
         node.parent?.type === "VariableDeclarator" &&
         node.parent.parent?.type === "VariableDeclaration"
@@ -201,12 +208,13 @@ export default createRule<[], MessageIds>({
       for (const comment of comments) {
         const text =
           comment.type === "Block" ? `/*${comment.value}*/` : comment.value;
-        if (parseTransparentAnnotation(text)) {
-          return true;
+        const ta = parseTransparentAnnotation(text);
+        if (ta) {
+          return ta;
         }
       }
 
-      return false;
+      return null;
     }
 
     /**
@@ -216,8 +224,11 @@ export default createRule<[], MessageIds>({
       const componentName = getComponentName(node);
 
       // Check for @transparent annotation
-      if (componentName && isComponentName(componentName) && hasTransparentAnnotation(node)) {
-        transparentComponents.add(componentName);
+      if (componentName && isComponentName(componentName)) {
+        const ta = getTransparentAnnotation(node);
+        if (ta) {
+          transparentComponents.set(componentName, new Set(ta.propNames));
+        }
       }
 
       const annotation = getRendersAnnotation(node);
