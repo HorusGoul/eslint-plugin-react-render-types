@@ -17,6 +17,7 @@ Patterns for building React components with `@renders` type annotations. Covers 
 @renders {A | B}       Union — must return A or B
 @renders {MyAlias}     Type alias — resolves type MyAlias = A | B at lint time
 @transparent           Wrapper — plugin looks through to validate children
+                       (or use additionalTransparentComponents setting for built-ins)
 ```
 
 ## Pattern Categories

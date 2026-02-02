@@ -121,6 +121,36 @@ export default [
 ];
 ```
 
+## Settings
+
+### `additionalTransparentComponents`
+
+Specify component names to treat as transparent wrappers without `@transparent` JSDoc. Useful for built-in components like `Suspense` or third-party components you can't annotate.
+
+```javascript
+// eslint.config.js
+export default [
+  reactRenderTypes.configs.recommended,
+  {
+    languageOptions: {
+      parserOptions: { projectService: true },
+    },
+    settings: {
+      "react-render-types": {
+        additionalTransparentComponents: [
+          "Suspense",
+          "ErrorBoundary",
+        ],
+      },
+    },
+  },
+];
+```
+
+For member expressions like `<React.Suspense>`, use the dotted form: `"React.Suspense"`.
+
+These merge with `@transparent` JSDoc annotations — both sources are combined.
+
 ## Troubleshooting
 
 | Error | Fix |

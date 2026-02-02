@@ -69,6 +69,37 @@ interface TabsProps {
 </Tabs>
 ```
 
+### Built-in and third-party transparent components
+
+Components like `Suspense` or `ErrorBoundary` can't be annotated with `@transparent` JSDoc. Use the `additionalTransparentComponents` shared setting instead:
+
+```javascript
+// eslint.config.js
+{
+  settings: {
+    "react-render-types": {
+      additionalTransparentComponents: ["Suspense", "ErrorBoundary"],
+    },
+  },
+}
+```
+
+Then the plugin sees through them automatically:
+
+```tsx
+/** @renders {Header} */
+function LazyHeader() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <Header title="Dashboard" />
+    </Suspense>
+  );
+  // OK — plugin looks through Suspense to find Header
+}
+```
+
+For member expressions like `<React.Suspense>`, use the dotted form: `"React.Suspense"`.
+
 ### When NOT to use `@transparent`
 
 Don't mark a component as transparent if it adds semantic meaning to composition. For example, a `TabPanel` that renders differently from a `Tab` should NOT be transparent — it's a distinct component type.
