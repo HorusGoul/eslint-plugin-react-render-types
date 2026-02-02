@@ -156,7 +156,7 @@ These merge with `@transparent` JSDoc annotations — both sources are combined.
 
 ## IDE Integration: Unused Import Suppression
 
-When a component is imported only for use in a `@renders` annotation, TypeScript's `noUnusedLocals` may flag it as unused in the IDE. The plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
+When a component is imported only for use in a `@renders` annotation, the IDE will grey it out as unused and may auto-remove it on save. The plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
 
 Add to `tsconfig.json`:
 

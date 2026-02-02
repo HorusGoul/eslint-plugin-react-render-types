@@ -817,7 +817,9 @@ This rule works similarly to `eslint-plugin-react`'s `jsx-uses-vars` rule.
 
 ## IDE Integration: Unused Import Suppression
 
-When a component is imported only for use in a `@renders` JSDoc annotation, TypeScript's `noUnusedLocals` may flag it as unused in your IDE. This plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
+When a component is imported only for use in a `@renders` JSDoc annotation, your IDE will show it as unused — greying out the import, and potentially removing it on save if you have "organize imports" enabled. This happens because TypeScript's language service doesn't know the import is referenced in a JSDoc comment.
+
+This plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
 
 ### Setup
 
@@ -837,10 +839,10 @@ Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript:
 
 ### How It Works
 
-The plugin intercepts TypeScript's diagnostic output in the IDE and filters out "declared but never read" errors (codes 6133, 6196) for identifiers referenced in `@renders` annotations in the same file.
+The plugin intercepts TypeScript's language service diagnostics in the IDE and filters out "declared but never read" hints (codes 6133, 6196) for identifiers referenced in `@renders` annotations in the same file.
 
 ```tsx
-import { Header } from './Header';  // No longer greyed out in IDE
+import { Header } from './Header';  // No longer greyed out or auto-removed
 
 /** @renders {Header} */
 function MyHeader() {

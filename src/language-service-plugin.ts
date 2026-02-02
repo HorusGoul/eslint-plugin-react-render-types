@@ -1,6 +1,10 @@
 /**
- * TypeScript Language Service Plugin that suppresses "unused import"
- * diagnostics for components referenced in @renders JSDoc annotations.
+ * TypeScript Language Service Plugin that prevents IDEs from greying out
+ * or auto-removing imports referenced in @renders JSDoc annotations.
+ *
+ * Without this plugin, TypeScript's language service treats these imports as
+ * unused (since they only appear in JSDoc comments, not in runtime code),
+ * causing them to be dimmed and potentially removed by "organize imports".
  *
  * This is an IDE-only feature — it does not affect `tsc` CLI output.
  *
