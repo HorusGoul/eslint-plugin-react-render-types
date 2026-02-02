@@ -9,6 +9,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./language-service-plugin": {
+      "types": "./dist/language-service-plugin.d.ts",
+      "import": "./dist/language-service-plugin.js",
+      "require": "./dist/language-service-plugin.js"
     }
   },
   "files": [

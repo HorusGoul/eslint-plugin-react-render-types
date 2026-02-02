@@ -1,0 +1,89 @@
+/**
+ * TypeScript Language Service Plugin that suppresses "unused import"
+ * diagnostics for components referenced in @renders JSDoc annotations.
+ *
+ * This is an IDE-only feature — it does not affect `tsc` CLI output.
+ *
+ * Enable in tsconfig.json:
+ * {
+ *   "compilerOptions": {
+ *     "plugins": [
+ *       { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+ *     ]
+ *   }
+ * }
+ */
+
+import type ts from "typescript/lib/tsserverlibrary";
+
+/** Diagnostic codes for "declared but never read / never used" */
+const UNUSED_DIAGNOSTIC_CODES = new Set([
+  6133, // '{0}' is declared but its value is never read.
+  6196, // '{0}' is declared but never used.
+]);
+
+/**
+ * Extract component names referenced in @renders annotations from source text.
+ * Handles union types (Header | Footer), namespaced (Menu.Item → Menu),
+ * and all modifiers (@renders?, @renders*, @renders!).
+ */
+function getRendersComponentNames(sourceText: string): Set<string> {
+  const regex = /(?:^|[^a-zA-Z@])@renders(?:\?|\*)?(?:!)?\s*\{\s*([^}]+)\s*\}/g;
+  const names = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(sourceText)) !== null) {
+    const typeExpr = match[1];
+    for (const part of typeExpr.split("|")) {
+      const name = part.trim().split(".")[0]; // Menu.Item → Menu
+      if (name && /^[A-Z]/.test(name)) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+}
+
+function init(modules: { typescript: typeof ts }) {
+  function create(info: ts.server.PluginCreateInfo) {
+    const proxy = Object.create(null) as ts.LanguageService;
+
+    // Delegate all methods to the original language service
+    for (const k of Object.keys(info.languageService) as Array<keyof ts.LanguageService>) {
+      const x = info.languageService[k]!;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
+      (proxy as any)[k] = (...args: any[]) => (x as any).apply(info.languageService, args);
+    }
+
+    function filterDiagnostics<T extends ts.Diagnostic>(fileName: string, diagnostics: T[]): T[] {
+      const program = info.languageService.getProgram();
+      const sourceFile = program?.getSourceFile(fileName);
+      if (!sourceFile) return diagnostics;
+
+      const rendersNames = getRendersComponentNames(sourceFile.text);
+      if (rendersNames.size === 0) return diagnostics;
+
+      return diagnostics.filter((d) => {
+        if (!UNUSED_DIAGNOSTIC_CODES.has(d.code)) return true;
+        if (d.start == null || d.length == null) return true;
+        const name = sourceFile.text.substring(d.start, d.start + d.length);
+        return !rendersNames.has(name);
+      });
+    }
+
+    proxy.getSemanticDiagnostics = (fileName: string) => {
+      const prior = info.languageService.getSemanticDiagnostics(fileName);
+      return filterDiagnostics(fileName, prior);
+    };
+
+    proxy.getSuggestionDiagnostics = (fileName: string) => {
+      const prior = info.languageService.getSuggestionDiagnostics(fileName);
+      return filterDiagnostics(fileName, prior);
+    };
+
+    return proxy;
+  }
+
+  return { create };
+}
+
+export = init;

@@ -815,6 +815,44 @@ function MyHeader() {
 
 This rule works similarly to `eslint-plugin-react`'s `jsx-uses-vars` rule.
 
+## IDE Integration: Unused Import Suppression
+
+When a component is imported only for use in a `@renders` JSDoc annotation, TypeScript's `noUnusedLocals` may flag it as unused in your IDE. This plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
+
+### Setup
+
+Add the plugin to your `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "plugins": [
+      { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+    ]
+  }
+}
+```
+
+Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript: Restart TS Server").
+
+### How It Works
+
+The plugin intercepts TypeScript's diagnostic output in the IDE and filters out "declared but never read" errors (codes 6133, 6196) for identifiers referenced in `@renders` annotations in the same file.
+
+```tsx
+import { Header } from './Header';  // No longer greyed out in IDE
+
+/** @renders {Header} */
+function MyHeader() {
+  return <HeaderWrapper />;
+}
+```
+
+### Important Notes
+
+- **IDE-only** — this plugin runs in your editor's TypeScript language service, not during `tsc` CLI builds. For CI, use `@typescript-eslint/no-unused-vars` with the `renders-uses-vars` rule instead.
+- Works with all `@renders` modifiers (`@renders?`, `@renders*`, `@renders!`) and union types (`@renders {A | B}`).
+
 ## Comparison with Flow Render Types
 
 | Feature | Flow | This Plugin |
