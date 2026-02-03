@@ -3,6 +3,7 @@ import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
 import { isComponentName, getWrappingVariableDeclarator } from "../utils/component-utils.js";
+import { getPluginSettings } from "../utils/settings.js";
 import type { createCrossFileResolver } from "../utils/cross-file-resolver.js";
 import { createCrossFileResolver as createResolver } from "../utils/cross-file-resolver.js";
 
@@ -128,6 +129,8 @@ export default createRule<[], MessageIds>({
       comment: TSESTree.Comment;
       componentName: string;
     }> = [];
+
+    const { additionalComponentWrappers } = getPluginSettings(context.settings);
 
     // Get typed parser services (required for this rule)
     const parserServices = ESLintUtils.getParserServices(context);
@@ -258,7 +261,7 @@ export default createRule<[], MessageIds>({
         name = node.parent.id.name;
       } else {
         // For functions inside React wrappers: forwardRef, memo
-        const wrapper = getWrappingVariableDeclarator(node);
+        const wrapper = getWrappingVariableDeclarator(node, additionalComponentWrappers);
         if (wrapper?.id.type === "Identifier") {
           name = wrapper.id.name;
         }

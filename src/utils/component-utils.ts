@@ -29,16 +29,17 @@ export function getJSXElementName(node: TSESTree.JSXElement): string | null {
 const REACT_WRAPPER_NAMES = new Set(["forwardRef", "memo"]);
 
 /**
- * Check if a CallExpression is a known React wrapper (forwardRef, memo).
+ * Check if a CallExpression is a known React wrapper (forwardRef, memo, or user-configured).
  * Matches both `forwardRef(...)` and `React.forwardRef(...)`.
  */
 export function isReactWrapperCall(
-  node: TSESTree.CallExpression
+  node: TSESTree.CallExpression,
+  additionalWrappers?: Set<string>
 ): boolean {
   const { callee } = node;
 
   if (callee.type === "Identifier") {
-    return REACT_WRAPPER_NAMES.has(callee.name);
+    return REACT_WRAPPER_NAMES.has(callee.name) || (additionalWrappers?.has(callee.name) ?? false);
   }
 
   if (
@@ -46,7 +47,7 @@ export function isReactWrapperCall(
     callee.object.type === "Identifier" &&
     callee.property.type === "Identifier"
   ) {
-    return REACT_WRAPPER_NAMES.has(callee.property.name);
+    return REACT_WRAPPER_NAMES.has(callee.property.name) || (additionalWrappers?.has(callee.property.name) ?? false);
   }
 
   return false;
@@ -67,14 +68,15 @@ type FunctionNode =
  *   const X = memo(forwardRef((props, ref) => ...))
  */
 export function getWrappingVariableDeclarator(
-  node: FunctionNode
+  node: FunctionNode,
+  additionalWrappers?: Set<string>
 ): TSESTree.VariableDeclarator | null {
   let current: TSESTree.Node = node;
 
   // Walk up through CallExpression layers that are React wrappers
   while (
     current.parent?.type === "CallExpression" &&
-    isReactWrapperCall(current.parent)
+    isReactWrapperCall(current.parent, additionalWrappers)
   ) {
     current = current.parent;
   }

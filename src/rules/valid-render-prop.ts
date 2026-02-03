@@ -56,7 +56,7 @@ export default createRule<[], MessageIds>({
     const localTransparentComponents = new Map<string, Set<string>>();
 
     // Settings-based transparent components (remain name-based)
-    const { transparentComponentsMap: settingsTransparentComponents } = getPluginSettings(context.settings);
+    const { transparentComponentsMap: settingsTransparentComponents, additionalComponentWrappers } = getPluginSettings(context.settings);
 
     // Merged transparency map: built at Program:exit from settings + local + cross-file
     let transparentComponents = new Map<string, Set<string>>();
@@ -100,7 +100,7 @@ export default createRule<[], MessageIds>({
       }
 
       // For functions inside React wrappers: forwardRef, memo
-      const wrapper = getWrappingVariableDeclarator(node);
+      const wrapper = getWrappingVariableDeclarator(node, additionalComponentWrappers);
       if (wrapper) {
         return wrapper.id.type === "Identifier" ? wrapper.id.name : null;
       }
@@ -174,7 +174,7 @@ export default createRule<[], MessageIds>({
 
       // For functions inside React wrappers: forwardRef, memo
       if (!varDeclarator) {
-        varDeclarator = getWrappingVariableDeclarator(node);
+        varDeclarator = getWrappingVariableDeclarator(node, additionalComponentWrappers);
       }
 
       let nodeToCheck: TSESTree.Node =

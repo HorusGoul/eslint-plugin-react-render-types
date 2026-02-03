@@ -3,6 +3,7 @@ import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
 import { isComponentName, getWrappingVariableDeclarator } from "../utils/component-utils.js";
+import { getPluginSettings } from "../utils/settings.js";
 
 type MessageIds = "missingRendersAnnotation";
 
@@ -130,6 +131,8 @@ export default createRule<[], MessageIds>({
     // Require typed parser services
     ESLintUtils.getParserServices(context);
 
+    const { additionalComponentWrappers } = getPluginSettings(context.settings);
+
     /**
      * Get component name from a function node
      */
@@ -147,7 +150,7 @@ export default createRule<[], MessageIds>({
       }
 
       // For functions inside React wrappers: forwardRef, memo
-      const wrapper = getWrappingVariableDeclarator(node);
+      const wrapper = getWrappingVariableDeclarator(node, additionalComponentWrappers);
       if (wrapper) {
         return wrapper.id.type === "Identifier" ? wrapper.id.name : null;
       }
@@ -165,7 +168,7 @@ export default createRule<[], MessageIds>({
 
       // For functions inside React wrappers: forwardRef, memo
       if (!varDeclarator) {
-        varDeclarator = getWrappingVariableDeclarator(node);
+        varDeclarator = getWrappingVariableDeclarator(node, additionalComponentWrappers);
       }
 
       let nodeToCheck: TSESTree.Node =
@@ -220,7 +223,7 @@ export default createRule<[], MessageIds>({
             : node.parent?.type === "VariableDeclarator" &&
                 node.parent.id.type === "Identifier"
               ? node.parent.id
-              : getWrappingVariableDeclarator(node)?.id ?? node;
+              : getWrappingVariableDeclarator(node, additionalComponentWrappers)?.id ?? node;
 
         context.report({
           node: reportNode,

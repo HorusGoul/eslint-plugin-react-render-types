@@ -1052,6 +1052,40 @@ ruleTester.run("valid-render-return", rule, {
       ),
       filename: "test.tsx",
     },
+    {
+      name: "custom wrapper via additionalComponentWrappers setting",
+      code: withComponents(
+        `
+        declare function observer(component: any): any;
+        /** @renders {Header} */
+        const MyHeader = observer(() => <Header />);
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalComponentWrappers: ["observer"],
+        },
+      },
+    },
+    {
+      name: "custom wrapper with member expression via settings",
+      code: withComponents(
+        `
+        declare const mobx: { observer: (component: any) => any };
+        /** @renders {Header} */
+        const MyHeader = mobx.observer(() => <Header />);
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalComponentWrappers: ["observer"],
+        },
+      },
+    },
   ],
   invalid: [
     // Wrong component returned
