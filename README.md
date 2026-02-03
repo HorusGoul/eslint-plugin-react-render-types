@@ -37,7 +37,7 @@ See the [example project](./example/) for a full dashboard app demonstrating cro
 - [Rules](#rules)
 - [JSDoc Syntax](#jsdoc-syntax)
 - [IDE Integration](#ide-integration-unused-import-suppression)
-- [Features](#features)
+- [Limitations](#limitations)
 - [Agent Skills](#agent-skills)
 - [License](#license)
 
@@ -369,25 +369,12 @@ Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript:
 
 > **Note:** This is IDE-only — it runs in your editor's TypeScript language service, not during `tsc` CLI builds. For CI, use `@typescript-eslint/no-unused-vars` with the `renders-uses-vars` rule.
 
-## Features
+## Limitations
 
-| Feature | Status |
-|---------|--------|
-| Required renders | ✅ `@renders {Header}` |
-| Optional renders | ✅ `@renders? {Header}` |
-| Many renders | ✅ `@renders* {Header}` |
-| Union types | ✅ `@renders {A \| B}` |
-| Type alias unions | ✅ `@renders {MyAlias}` |
-| Transparent components | ✅ `@transparent` |
-| Unchecked (escape hatch) | ✅ `@renders! {X}` |
-| Expression analysis | 🟡 ternary, `&&`, `.map()` — dynamic rendering requires `@renders!` |
-| Chained rendering | ✅ |
-| Props / children validation | ✅ |
-| Cross-file resolution | ✅ |
-| IDE unused import suppression | ✅ TS language service plugin |
-| `forwardRef` / `memo` / `lazy` | 🔲 Not yet supported |
-| Higher-order components | 🔲 Not yet supported |
-| Class components | ⛔ Not supported |
+- **Dynamic rendering** — Component registries and computed JSX (`componentMap[type]`) can't be statically analyzed. Use `@renders!` to skip return validation while still declaring the render type.
+- **`forwardRef` / `memo` / `lazy`** — Wrapped components are not yet recognized for annotation detection.
+- **Higher-order components** — Arbitrary HOC patterns can't be followed. Use `@renders!` on the wrapped component.
+- **Class components** — Only function components are supported.
 
 ## Agent Skills
 
