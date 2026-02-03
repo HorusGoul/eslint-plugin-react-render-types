@@ -371,8 +371,8 @@ Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript:
 
 ## Features
 
-| Feature | Supported |
-|---------|-----------|
+| Feature | Status |
+|---------|--------|
 | Required renders | `@renders {Header}` |
 | Optional renders | `@renders? {Header}` |
 | Many renders | `@renders* {Header}` |
@@ -385,6 +385,10 @@ Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript:
 | Props / children validation | ✓ |
 | Cross-file resolution | ✓ |
 | IDE unused import suppression | ✓ (TS language service plugin) |
+| Dynamic component rendering | Use `@renders!` escape hatch |
+| `forwardRef` / `memo` / `lazy` | Not yet supported |
+| Higher-order components | Not yet supported |
+| Class components | Not supported |
 
 ## Agent Skills
 
