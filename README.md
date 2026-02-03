@@ -6,24 +6,40 @@
 
 An ESLint plugin that brings [Flow's Render Types](https://flow.org/en/docs/react/render-types/) to TypeScript via JSDoc comments. Enforce component composition constraints at lint time.
 
-## The Problem
+> [!WARNING]
+> This project was recently released and is in active development. APIs may change between minor releases. Feedback, bug reports, and contributions are welcome.
 
-Design systems often need to constrain which components can be rendered in specific contexts. For example:
-- A `Menu` should only accept `MenuItem` children
-- A `Tabs` component should only render `Tab` components
-- A `Card` header slot should only accept `CardHeader`
+Design systems often need to constrain which components can be rendered in specific contexts — a `Menu` should only accept `MenuItem` children, a `Tabs` component should only render `Tab` components, and so on. This plugin lets you express those constraints with `@renders` JSDoc annotations and validates them at lint time.
 
-Without render types, these constraints can't be enforced at compile/lint time, leading to runtime errors or unexpected behavior.
+```tsx
+/** @renders {MenuItem} */
+function MyMenuItem({ label }: { label: string }) {
+  return <MenuItem>{label}</MenuItem>;  // ✓ Valid
+}
 
-## The Solution
+interface MenuProps {
+  /** @renders {MenuItem} */
+  children: React.ReactNode;
+}
 
-This plugin allows you to annotate components with `@renders` JSDoc comments, then validates that:
-1. Components return what they declare
-2. Props expecting specific render types receive compatible components
-
-## Example
+<Menu>
+  <MyMenuItem label="Save" />   {/* ✓ Valid - MyMenuItem renders MenuItem */}
+  <Button>Oops</Button>         {/* ✗ Error: Expected MenuItem, got Button */}
+</Menu>
+```
 
 See the [example project](./example/) for a full dashboard app demonstrating cross-file render type validation with a design system built on React, Vite, and shadcn/ui.
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Rules](#rules)
+- [JSDoc Syntax](#jsdoc-syntax)
+- [IDE Integration](#ide-integration-unused-import-suppression)
+- [Limitations](#limitations)
+- [Agent Skills](#agent-skills)
+- [License](#license)
 
 ## Installation
 
@@ -42,29 +58,13 @@ This plugin requires:
 - `@typescript-eslint/parser` >= 8.0.0
 - `typescript` >= 5.0.0
 
-## Agent Skills
-
-This plugin provides agent skills for AI coding assistants (Claude Code, Cursor, Copilot, and [others](https://skills.sh/)). Install them to get help with setup, configuration, and composition patterns:
-
-```bash
-npx skills add HorusGoul/eslint-plugin-react-render-types
-```
-
-Available skills:
-
-- **react-render-types-setup** — Install, configure, and troubleshoot the plugin in your project
-- **react-render-types-composition** — Patterns for `@renders` annotations, transparent wrappers, render chains, and slot props
-
 ## Configuration
 
 ### ⚠️ Typed Linting Required
 
 **This plugin requires typed linting.** Without it, the plugin will throw an error.
 
-Typed linting connects ESLint to your TypeScript compiler, giving the plugin access to type information. This is required for:
-- Resolving component type identity across files (components with the same name from different files are correctly distinguished)
-- Following render chains through `@renders` annotations
-- Validating that props receive correctly-typed components
+Typed linting connects ESLint to your TypeScript compiler, giving the plugin access to type information needed for cross-file component identity, render chain resolution, and prop validation.
 
 ### Flat Config (ESLint 9+)
 
@@ -79,51 +79,17 @@ export default [
   {
     languageOptions: {
       parserOptions: {
-        // REQUIRED: Enable typed linting
-        projectService: true,
-        // Or use the legacy project option:
-        // project: './tsconfig.json',
+        projectService: true,  // REQUIRED — or use: project: './tsconfig.json'
       },
     },
   },
 ];
 ```
 
-### Setting Up Typed Linting
-
-There are two ways to enable typed linting:
-
-#### Option 1: `projectService` (Recommended for ESLint 9+)
-
-```javascript
-{
-  languageOptions: {
-    parserOptions: {
-      projectService: true,
-    },
-  },
-}
-```
-
-This automatically infers the TypeScript configuration for each file.
-
-#### Option 2: Explicit `project` Path
-
-```javascript
-{
-  languageOptions: {
-    parserOptions: {
-      project: './tsconfig.json',
-      // For monorepos, you may need:
-      // project: ['./tsconfig.json', './packages/*/tsconfig.json'],
-    },
-  },
-}
-```
-
 For more details on typed linting setup, see the [typescript-eslint documentation](https://typescript-eslint.io/getting-started/typed-linting/).
 
-### Manual Configuration
+<details>
+<summary>Manual configuration (without recommended preset)</summary>
 
 ```javascript
 // eslint.config.js
@@ -135,7 +101,7 @@ export default [
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        projectService: true,  // REQUIRED for typed linting
+        projectService: true,
         ecmaFeatures: { jsx: true },
       },
     },
@@ -150,80 +116,51 @@ export default [
 ];
 ```
 
-### Troubleshooting Typed Linting
+</details>
 
-If you encounter issues:
+### Troubleshooting
 
-1. **"Parsing error: Cannot read file tsconfig.json"** - Ensure the `project` path is correct relative to where ESLint runs
+1. **"Parsing error: Cannot read file tsconfig.json"** — Ensure the `project` path is correct relative to where ESLint runs
 
-2. **"File is not part of a TypeScript project"** - Add the file to your `tsconfig.json`'s `include` array, or use `projectService: { allowDefaultProject: ['*.tsx'] }`
+2. **"File is not part of a TypeScript project"** — Add the file to your `tsconfig.json`'s `include` array, or use `projectService: { allowDefaultProject: ['*.tsx'] }`
 
-3. **Performance issues** - Typed linting is slower than regular linting. Consider using `TIMING=1 eslint .` to identify bottlenecks. For large projects, see [typescript-eslint performance docs](https://typescript-eslint.io/troubleshooting/typed-linting/performance/)
+3. **Performance issues** — Typed linting is slower than regular linting. Run `TIMING=1 eslint .` to identify bottlenecks. For large projects, see [typescript-eslint performance docs](https://typescript-eslint.io/troubleshooting/typed-linting/performance/)
 
 ### Settings
 
 #### `additionalTransparentComponents`
 
-Specify component names that should be treated as transparent wrappers, allowing the plugin to "see through" them when validating `@renders` annotations. This is useful for built-in components like `Suspense` or third-party components you can't annotate with `@transparent`.
-
-**String entries** default to looking through `children`:
+Specify component names that should be treated as transparent wrappers. This is useful for built-in components like `Suspense` or third-party components you can't annotate with `@transparent`. String entries look through `children`; object entries specify which props to look through:
 
 ```javascript
-// eslint.config.js
-export default [
-  // ...
-  {
-    settings: {
-      "react-render-types": {
-        additionalTransparentComponents: [
-          "Suspense",
-          "ErrorBoundary",
-        ],
-      },
-    },
+settings: {
+  "react-render-types": {
+    additionalTransparentComponents: [
+      "Suspense",
+      "ErrorBoundary",
+      { name: "Flag", props: ["off", "children"] },
+    ],
   },
-];
-```
-
-**Object entries** specify which props to look through:
-
-```javascript
-additionalTransparentComponents: [
-  "Suspense",
-  { name: "Flag", props: ["off", "children"] },
-]
-```
-
-With this setting, the plugin looks through configured components to validate their children and named props:
-
-```tsx
-/** @renders {Header} */
-function MyHeader() {
-  return (
-    <Suspense fallback={<Spinner />}>
-      <Header />  {/* ✓ Plugin validates Header, not Suspense */}
-    </Suspense>
-  );
-}
-
-interface NavProps {
-  /** @renders* {NavItem} */
-  children: React.ReactNode;
-}
-
-// Plugin validates NavItem in both `off` prop and children
-<Nav>
-  <Flag name="new-feature" off={<NavItem label="Old" />}>
-    <NavItem label="New" />
-  </Flag>
-</Nav>
+},
 ```
 
 For member expressions like `<React.Suspense>`, use the dotted form: `"React.Suspense"`.
 
-These work alongside `@transparent` JSDoc annotations — both sources are merged. Note that `@transparent` annotations are resolved cross-file automatically (the plugin discovers them on imported components via TypeScript's type checker), so settings are only needed for components you can't annotate with JSDoc (e.g., React built-ins like `Suspense`).
+These work alongside `@transparent` JSDoc annotations — both sources are merged. `@transparent` annotations are resolved cross-file automatically via TypeScript's type checker, so settings are only needed for components you can't annotate with JSDoc.
+
+## Rules
+
+| Rule | Default | Description |
+|------|---------|-------------|
+| [`valid-render-return`](./docs/rules/valid-render-return.md) | `error` | Component return matches its `@renders` declaration |
+| [`valid-render-prop`](./docs/rules/valid-render-prop.md) | `error` | Props/children receive compatible components |
+| [`valid-renders-jsdoc`](./docs/rules/valid-renders-jsdoc.md) | `warn` | `@renders` syntax is well-formed (braces, PascalCase) |
+| [`require-renders-annotation`](./docs/rules/require-renders-annotation.md) | `off` | Requires `@renders` on all components |
+| [`renders-uses-vars`](./docs/rules/renders-uses-vars.md) | `error` | Marks `@renders` references as used (prevents `no-unused-vars`) |
 
 ## JSDoc Syntax
+
+Annotations work on function declarations, arrow functions, function expressions, and namespaced components (`Menu.Item`).
 
 ### `@renders {Component}` - Required
 
@@ -239,11 +176,6 @@ function MyHeader() {
 function BadHeader() {
   return <Footer />;  // ✗ Error: Expected Header, got Footer
 }
-
-/** @renders {Header} */
-function AlsoBad() {
-  return null;  // ✗ Error: Expected Header, got null
-}
 ```
 
 ### `@renders? {Component}` - Optional
@@ -255,11 +187,6 @@ The component **may** render the specified component type, or return nothing (`n
 function MaybeHeader({ show }: { show: boolean }) {
   if (!show) return null;  // ✓ Valid - null allowed
   return <Header />;       // ✓ Valid
-}
-
-/** @renders? {Header} */
-function BadMaybeHeader() {
-  return <Footer />;  // ✗ Error: Expected Header, got Footer
 }
 ```
 
@@ -276,26 +203,11 @@ function MenuItems({ items }: { items: string[] }) {
     </>
   );  // ✓ Valid - fragment with multiple MenuItems
 }
-
-/** @renders* {MenuItem} */
-function SingleItem() {
-  return <MenuItem />;  // ✓ Valid - single item allowed
-}
-
-/** @renders* {MenuItem} */
-function NoItems() {
-  return null;  // ✓ Valid - zero items allowed
-}
-
-/** @renders* {MenuItem} */
-function BadItems() {
-  return <Footer />;  // ✗ Error: Expected MenuItem, got Footer
-}
 ```
 
 ### `@renders {A | B}` - Union Types
 
-The component **must** render one of the specified component types.
+The component **must** render one of the specified component types. Union types work with all modifiers (`@renders?`, `@renders*`).
 
 ```tsx
 /** @renders {Header | Footer} */
@@ -303,36 +215,9 @@ function LayoutSection({ type }: { type: string }) {
   if (type === "header") return <Header />;  // ✓ Valid
   return <Footer />;                          // ✓ Valid
 }
-
-/** @renders {Header | Footer} */
-function BadSection() {
-  return <Sidebar />;  // ✗ Error: Expected Header | Footer, got Sidebar
-}
 ```
 
-Union types work with all modifiers:
-
-```tsx
-/** @renders? {Header | Footer} */
-function MaybeSection({ show }: { show: boolean }) {
-  if (!show) return null;  // ✓ Valid - optional
-  return <Header />;       // ✓ Valid
-}
-
-/** @renders* {MenuItem | Divider} */
-function MenuContent() {
-  return (
-    <>
-      <MenuItem />
-      <Divider />
-    </>
-  );  // ✓ Valid - multiple elements from union
-}
-```
-
-### Type Alias Unions
-
-You can use TypeScript type aliases to define union types and reference them in `@renders` annotations:
+You can also use TypeScript type aliases — the plugin resolves them at lint time:
 
 ```tsx
 type LayoutSlot = Header | Footer | Sidebar;
@@ -345,22 +230,9 @@ function Section({ type }: { type: string }) {
 }
 ```
 
-This also works with prop annotations:
-
-```tsx
-type MenuChild = MenuItem | Divider;
-
-interface MenuProps {
-  /** @renders {MenuChild} */
-  children: React.ReactNode;
-}
-```
-
-The plugin resolves the type alias at lint time using TypeScript's type checker, expanding it to the underlying union members for validation.
-
 ### `@transparent` - Transparent Components
 
-Transparent components are wrappers that don't affect render type validation. Mark a component as transparent so the plugin "looks through" it to validate the actual children being rendered.
+Transparent components are wrappers that don't affect render type validation. The plugin "looks through" them to validate the actual children being rendered. Without `@transparent`, the plugin would see the wrapper and report an error.
 
 ```tsx
 /** @transparent */
@@ -376,59 +248,9 @@ function MyHeader() {
     </Wrapper>
   );
 }
-
-/** @renders {Header} */
-function BadHeader() {
-  return (
-    <Wrapper>
-      <Footer />  {/* ✗ Error: Expected Header, got Footer */}
-    </Wrapper>
-  );
-}
 ```
 
-Transparent components can be nested:
-
-```tsx
-/** @transparent */
-function OuterWrapper({ children }: { children: React.ReactNode }) {
-  return <div className="outer">{children}</div>;
-}
-
-/** @transparent */
-function InnerWrapper({ children }: { children: React.ReactNode }) {
-  return <span className="inner">{children}</span>;
-}
-
-/** @renders {Header} */
-function MyHeader() {
-  return (
-    <OuterWrapper>
-      <InnerWrapper>
-        <Header />  {/* ✓ Valid - looks through both wrappers */}
-      </InnerWrapper>
-    </OuterWrapper>
-  );
-}
-```
-
-Transparent wrappers also work with props validation:
-
-```tsx
-/** @transparent */
-function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>;
-}
-
-interface TabsProps {
-  /** @renders {Tab} */
-  children: React.ReactNode;
-}
-
-<Tabs>
-  <Wrapper><Tab /></Wrapper>  {/* ✓ Valid */}
-</Tabs>
-```
+Transparent components can be nested and also work with props validation. `@transparent` annotations work **cross-file** — when you import a transparent component from another file, the plugin automatically discovers its annotation via TypeScript's type checker.
 
 #### Named Prop Transparency
 
@@ -441,183 +263,16 @@ function Flag({ name, off, children }: { name: string; off: React.ReactNode; chi
   return <>{isEnabled ? children : off}</>;
 }
 
-interface DashboardGridProps {
-  /** @renders* {DashboardCard} */
-  children: React.ReactNode;
-}
-
 <DashboardGrid>
   <Flag name="new-feature" off={<StatCard ... />}>
-    <ChartCard ... />  {/* ✓ Both off and children are validated as DashboardCard */}
+    <ChartCard ... />  {/* ✓ Both off and children are validated */}
   </Flag>
 </DashboardGrid>
 ```
 
 `@transparent` (bare) and `@transparent {children}` are equivalent.
 
-## Chained Rendering
-
-Components can satisfy render types through other components that themselves have `@renders` annotations:
-
-```tsx
-/** @renders {Header} */
-function BaseHeader() {
-  return <Header size="large" />;
-}
-
-/** @renders {Header} */
-function CustomHeader() {
-  return <BaseHeader />;  // ✓ Valid - BaseHeader renders Header
-}
-
-/** @renders {Header} */
-function StyledHeader() {
-  return <CustomHeader />;  // ✓ Valid - chains through CustomHeader → BaseHeader → Header
-}
-```
-
-## Props Validation
-
-Annotate interface properties to enforce render types on props:
-
-```tsx
-interface MenuProps {
-  /** @renders {MenuItem} */
-  children: React.ReactNode;
-}
-
-function Menu({ children }: MenuProps) {
-  return <ul>{children}</ul>;
-}
-
-// Usage
-<Menu>
-  <MenuItem />  {/* ✓ Valid */}
-  <MenuItem />  {/* ✓ Valid */}
-</Menu>
-
-<Menu>
-  <Button />  {/* ✗ Error: Expected MenuItem, got Button */}
-</Menu>
-```
-
-### Named Props
-
-```tsx
-interface LayoutProps {
-  /** @renders {Header} */
-  header: React.ReactNode;
-
-  /** @renders? {Footer} */
-  footer?: React.ReactNode;
-}
-
-function Layout({ header, footer }: LayoutProps) {
-  return (
-    <div>
-      {header}
-      <main>...</main>
-      {footer}
-    </div>
-  );
-}
-
-// Usage
-<Layout
-  header={<Header />}      // ✓ Valid
-  footer={null}            // ✓ Valid - optional
-/>
-
-<Layout
-  header={<div>Oops</div>} // ✗ Error: Expected Header, got div
-/>
-```
-
-## Transparent Components
-
-Transparent components are wrappers that don't affect render type validation. Mark them with the `@transparent` JSDoc tag so the plugin "looks through" the wrapper to find the actual component being rendered.
-
-```tsx
-/**
- * @transparent
- */
-function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div className="wrapper">{children}</div>;
-}
-
-/** @renders {Header} */
-function MyHeader() {
-  return (
-    <Wrapper>
-      <Header />  {/* ✓ Valid - plugin looks through Wrapper */}
-    </Wrapper>
-  );
-}
-```
-
-Without `@transparent`, the plugin would see `Wrapper` being returned and report an error because `Wrapper` is not `Header`.
-
-`@transparent` annotations work **cross-file** — when you import a transparent component from another file, the plugin automatically discovers its annotation via TypeScript's type checker. No settings configuration is needed for components you control.
-
-### Nested Transparent Wrappers
-
-Transparent wrappers can be nested:
-
-```tsx
-/** @transparent */
-function OuterWrapper({ children }: { children: React.ReactNode }) {
-  return <div className="outer">{children}</div>;
-}
-
-/** @transparent */
-function InnerWrapper({ children }: { children: React.ReactNode }) {
-  return <span className="inner">{children}</span>;
-}
-
-/** @renders {Header} */
-function MyHeader() {
-  return (
-    <OuterWrapper>
-      <InnerWrapper>
-        <Header />  {/* ✓ Valid */}
-      </InnerWrapper>
-    </OuterWrapper>
-  );
-}
-```
-
-### Expression Children
-
-The plugin can analyze expressions inside transparent wrappers (and in general):
-
-```tsx
-/** @transparent */
-function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>;
-}
-
-/** @renders? {Header} */
-function ConditionalHeader({ show }: { show: boolean }) {
-  return <Wrapper>{show && <Header />}</Wrapper>;  // ✓ Valid
-}
-
-/** @renders {Header | Footer} */
-function FlexComponent({ isHeader }: { isHeader: boolean }) {
-  return isHeader ? <Header /> : <Footer />;  // ✓ Valid
-}
-
-/** @renders* {MenuItem} */
-function MenuItems({ items }: { items: string[] }) {
-  return <>{items.map(item => <MenuItem key={item} />)}</>;  // ✓ Valid
-}
-```
-
-Supported expression patterns:
-- Logical AND: `{condition && <Component />}`
-- Ternary: `{condition ? <A /> : <B />}`
-- `.map()` / `.flatMap()` callbacks: `{items.map(item => <Component />)}`
-
-## Unchecked Annotations (`@renders!`)
+### `@renders!` - Unchecked
 
 When the plugin can't statically analyze a component's return value (e.g., component registries, dynamic rendering), use `!` to skip return validation while still declaring the render type:
 
@@ -633,197 +288,72 @@ function MyHeader() {
 }
 ```
 
-`!` combines with existing modifiers:
-- `@renders! {X}` — required, unchecked
-- `@renders?! {X}` — optional, unchecked
-- `@renders*! {X}` — many, unchecked
+`!` combines with existing modifiers: `@renders! {X}`, `@renders?! {X}`, `@renders*! {X}`.
 
-## Supported Patterns
+### Chained Rendering
 
-### Function Declarations
+Components can satisfy render types through other components that themselves have `@renders` annotations:
 
 ```tsx
 /** @renders {Header} */
-function MyHeader() {
-  return <Header />;
+function BaseHeader() {
+  return <Header size="large" />;
 }
-```
-
-### Arrow Functions
-
-```tsx
-/** @renders {Header} */
-const MyHeader = () => <Header />;
 
 /** @renders {Header} */
-const MyHeader = () => {
-  return <Header />;
-};
+function StyledHeader() {
+  return <BaseHeader />;  // ✓ Valid - chains through BaseHeader → Header
+}
 ```
 
-### Function Expressions
+### Props Validation
+
+Annotate interface properties to enforce render types on props:
 
 ```tsx
-/** @renders {Header} */
-const MyHeader = function() {
-  return <Header />;
-};
+interface LayoutProps {
+  /** @renders {Header} */
+  header: React.ReactNode;
+
+  /** @renders? {Footer} */
+  footer?: React.ReactNode;
+}
+
+<Layout
+  header={<Header />}      // ✓ Valid
+  footer={null}            // ✓ Valid - optional
+/>
+
+<Layout
+  header={<div>Oops</div>} // ✗ Error: Expected Header, got div
+/>
 ```
 
-### Namespaced Components
+### Expression Patterns
+
+The plugin analyzes expressions in return statements and JSX children:
+
+- Logical AND: `{condition && <Component />}`
+- Ternary: `{condition ? <A /> : <B />}`
+- `.map()` / `.flatMap()` callbacks: `{items.map(item => <Component />)}`
 
 ```tsx
-/** @renders {Menu.Item} */
-function MyMenuItem() {
-  return <Menu.Item />;
+/** @renders? {Header} */
+function ConditionalHeader({ show }: { show: boolean }) {
+  return show && <Header />;  // ✓ Valid
+}
+
+/** @renders* {MenuItem} */
+function MenuItems({ items }: { items: string[] }) {
+  return <>{items.map(item => <MenuItem key={item} />)}</>;  // ✓ Valid
 }
 ```
-
-## Rules
-
-### `react-render-types/valid-render-return`
-
-Validates that function components return what their `@renders` annotation declares.
-
-**Error Examples:**
-
-```tsx
-/** @renders {Header} */
-function MyComponent() {
-  return <Footer />;  // Error
-}
-```
-
-```tsx
-/** @renders {Header} */
-function MyComponent() {
-  return null;  // Error (use @renders? for optional)
-}
-```
-
-### `react-render-types/valid-render-prop`
-
-Validates that props with `@renders` annotations receive compatible components.
-
-**Error Examples:**
-
-```tsx
-interface Props {
-  /** @renders {MenuItem} */
-  item: React.ReactNode;
-}
-
-<Menu item={<Button />} />  // Error: Expected MenuItem, got Button
-```
-
-### `react-render-types/valid-renders-jsdoc`
-
-Validates `@renders` JSDoc annotation syntax. Catches common mistakes like missing braces or incorrect component name casing.
-
-**Error Examples:**
-
-```tsx
-/** @renders Header */  // Error: Missing braces. Use: @renders {Header}
-function MyHeader() {
-  return <Header />;
-}
-```
-
-```tsx
-/** @renders {header} */  // Error: Component name should be PascalCase
-function MyHeader() {
-  return <Header />;
-}
-```
-
-```tsx
-/** @renders {} */  // Error: Provide a component name
-function MyHeader() {
-  return <Header />;
-}
-```
-
-### `react-render-types/require-renders-annotation`
-
-Requires `@renders` annotations on all React function components. **Disabled by default.**
-
-This rule is useful for enforcing render type annotations in specific folders, such as a design system or shared component library.
-
-**Example Configuration:**
-
-```javascript
-// eslint.config.js
-export default [
-  reactRenderTypes.configs.recommended,
-  {
-    // Enable for design system components only
-    files: ["src/design-system/**/*.tsx"],
-    rules: {
-      "react-render-types/require-renders-annotation": "error",
-    },
-  },
-];
-```
-
-**Error Examples:**
-
-```tsx
-// Error: Component 'MyHeader' is missing a @renders annotation
-function MyHeader() {
-  return <Header />;
-}
-
-// Error: Component 'Button' is missing a @renders annotation
-const Button = () => <button>Click me</button>;
-```
-
-**Valid Examples:**
-
-```tsx
-/** @renders {Header} */
-function MyHeader() {
-  return <Header />;
-}
-
-// Non-components (lowercase name) are ignored
-function helperFunction() {
-  return <div>Helper</div>;
-}
-
-// Functions without JSX returns are ignored
-function Calculator() {
-  return 42;
-}
-```
-
-### `react-render-types/renders-uses-vars`
-
-Marks components referenced in `@renders` annotations as "used" to prevent `no-unused-vars` errors. **Enabled by default.**
-
-When you import a component solely for use in a `@renders` annotation (without using it in JSX), ESLint's `no-unused-vars` would normally flag the import as unused. This rule prevents that by marking the component as used.
-
-**Example:**
-
-```tsx
-import { Header } from './Header';  // Without this rule: "Header is defined but never used"
-
-/** @renders {Header} */
-function MyHeader() {
-  return <HeaderWrapper />;  // HeaderWrapper itself @renders {Header}
-}
-```
-
-This rule works similarly to `eslint-plugin-react`'s `jsx-uses-vars` rule.
 
 ## IDE Integration: Unused Import Suppression
 
-When a component is imported only for use in a `@renders` JSDoc annotation, your IDE will show it as unused — greying out the import, and potentially removing it on save if you have "organize imports" enabled. This happens because TypeScript's language service doesn't know the import is referenced in a JSDoc comment.
+When a component is imported only for use in a `@renders` JSDoc annotation, your IDE will show it as unused — greying out the import, and potentially removing it on save if you have "organize imports" enabled.
 
-This plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
-
-### Setup
-
-Add the plugin to your `tsconfig.json`:
+This plugin includes a TypeScript Language Service Plugin that suppresses those false positives. Add to your `tsconfig.json`:
 
 ```json
 {
@@ -837,71 +367,25 @@ Add the plugin to your `tsconfig.json`:
 
 Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript: Restart TS Server").
 
-### How It Works
-
-The plugin intercepts TypeScript's language service diagnostics in the IDE and filters out "declared but never read" hints (codes 6133, 6196) for identifiers referenced in `@renders` annotations in the same file.
-
-```tsx
-import { Header } from './Header';  // No longer greyed out or auto-removed
-
-/** @renders {Header} */
-function MyHeader() {
-  return <HeaderWrapper />;
-}
-```
-
-### Important Notes
-
-- **IDE-only** — this plugin runs in your editor's TypeScript language service, not during `tsc` CLI builds. For CI, use `@typescript-eslint/no-unused-vars` with the `renders-uses-vars` rule instead.
-- Works with all `@renders` modifiers (`@renders?`, `@renders*`, `@renders!`) and union types (`@renders {A | B}`).
-
-## Comparison with Flow Render Types
-
-| Feature | Flow | This Plugin |
-|---------|------|-------------|
-| Syntax | `renders Header` | `@renders {Header}` |
-| Optional | `renders? Header` | `@renders? {Header}` |
-| Many | `renders* Header` | `@renders* {Header}` |
-| Union types | ✓ (language feature) | `@renders {A \| B}` |
-| Type alias unions | ✓ (language feature) | `@renders {MyAlias}` (resolves `type MyAlias = A \| B`) |
-| Transparent components | ✓ (`renders T`) | `@transparent` |
-| Unchecked (escape hatch) | — | `@renders! {X}` |
-| Expression analysis | ✓ | ✓ (ternary, `&&`, `.map()`) |
-| Chained rendering | ✓ | ✓ |
-| Props validation | ✓ | ✓ |
-| Children validation | ✓ | ✓ |
-| Compile-time checking | ✓ | ✓ (lint-time) |
+> **Note:** This is IDE-only — it runs in your editor's TypeScript language service, not during `tsc` CLI builds. For CI, use `@typescript-eslint/no-unused-vars` with the `renders-uses-vars` rule.
 
 ## Limitations
 
-- **Typed linting required** - This plugin uses TypeScript's type system for component identity resolution. See [Configuration](#configuration) for setup
-- **Function components only** - Class components are not currently supported
-- **JSDoc-based** - Requires explicit annotations (no inference)
+- **Dynamic rendering** — Component registries and computed JSX (`componentMap[type]`) can't be statically analyzed. Use `@renders!` to skip return validation while still declaring the render type.
+- **`forwardRef` / `memo` / `lazy`** — Wrapped components are not yet recognized for annotation detection.
+- **Higher-order components** — Arbitrary HOC patterns can't be followed. Use `@renders!` on the wrapped component.
+- **Class components** — Only function components are supported.
 
-## TypeScript Integration
+## Agent Skills
 
-This plugin uses `@typescript-eslint/parser` to parse TypeScript and JSX. **Typed linting must be enabled** for the plugin to work correctly - see the [Configuration](#configuration) section above.
+This plugin provides agent skills for AI coding assistants (Claude Code, Cursor, Copilot, and [others](https://skills.sh/)):
 
-The plugin:
-- Requires `@typescript-eslint/parser` >= 8.0.0
-- Requires typed linting (`projectService: true` or `project: './tsconfig.json'`)
-- Works alongside your existing TypeScript configuration and other ESLint rules
-- Is compatible with `typescript-eslint`'s recommended configs
-
-### Why Typed Linting?
-
-Unlike simple syntax-based rules, this plugin needs to understand the relationships between components. When you write:
-
-```tsx
-/** @renders {Header} */
-function CustomHeader() {
-  return <MyHeader />;  // Is this valid?
-}
+```bash
+npx skills add HorusGoul/eslint-plugin-react-render-types
 ```
 
-The plugin needs to know what `MyHeader` renders. This requires type information from TypeScript, which is only available with typed linting enabled.
-
-Additionally, the plugin uses TypeScript's type system to ensure components are the same type, not just the same name. Two components named `Header` from different files are correctly treated as different types.
+- **react-render-types-setup** — Install, configure, and troubleshoot the plugin
+- **react-render-types-composition** — Patterns for `@renders` annotations, transparent wrappers, render chains, and slot props
 
 ## License
 
