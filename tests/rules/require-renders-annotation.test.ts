@@ -185,6 +185,28 @@ ruleTester.run("require-renders-annotation", rule, {
       `,
       filename: "test.tsx",
     },
+    // forwardRef with @renders (valid)
+    {
+      name: "forwardRef with @renders annotation",
+      code: `
+        declare const forwardRef: typeof import('react').forwardRef;
+        /** @renders {Header} */
+        const MyHeader = forwardRef<HTMLDivElement, {}>((props, ref) => {
+          return <Header />;
+        });
+      `,
+      filename: "test.tsx",
+    },
+    // memo with @renders (valid)
+    {
+      name: "memo with @renders annotation",
+      code: `
+        declare const memo: typeof import('react').memo;
+        /** @renders {Header} */
+        const MyHeader = memo(() => <Header />);
+      `,
+      filename: "test.tsx",
+    },
   ],
   invalid: [
     // Missing annotation on function declaration
@@ -349,6 +371,38 @@ ruleTester.run("require-renders-annotation", rule, {
         {
           messageId: "missingRendersAnnotation",
           data: { componentName: "MyHeader" },
+        },
+      ],
+    },
+    // forwardRef missing @renders
+    {
+      name: "forwardRef missing @renders annotation",
+      code: `
+        declare const forwardRef: typeof import('react').forwardRef;
+        const MyButton = forwardRef<HTMLButtonElement, {}>((props, ref) => {
+          return <button ref={ref} />;
+        });
+      `,
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "missingRendersAnnotation",
+          data: { componentName: "MyButton" },
+        },
+      ],
+    },
+    // memo missing @renders
+    {
+      name: "memo missing @renders annotation",
+      code: `
+        declare const memo: typeof import('react').memo;
+        const MyButton = memo(() => <button />);
+      `,
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "missingRendersAnnotation",
+          data: { componentName: "MyButton" },
         },
       ],
     },

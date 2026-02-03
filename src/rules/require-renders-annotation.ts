@@ -2,7 +2,7 @@ import type { TSESTree } from "@typescript-eslint/utils";
 import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation } from "../utils/jsdoc-parser.js";
-import { isComponentName } from "../utils/component-utils.js";
+import { isComponentName, getWrappingVariableDeclarator } from "../utils/component-utils.js";
 
 type MessageIds = "missingRendersAnnotation";
 
@@ -146,6 +146,12 @@ export default createRule<[], MessageIds>({
         return node.parent.id.name;
       }
 
+      // For functions inside React wrappers: forwardRef, memo
+      const wrapper = getWrappingVariableDeclarator(node);
+      if (wrapper) {
+        return wrapper.id.type === "Identifier" ? wrapper.id.name : null;
+      }
+
       return null;
     }
 
@@ -154,10 +160,17 @@ export default createRule<[], MessageIds>({
      */
     function hasRendersAnnotation(node: FunctionNode): boolean {
       // For variable declarations (const MyComp = () => ...), check parent
+      let varDeclarator: TSESTree.VariableDeclarator | null =
+        node.parent?.type === "VariableDeclarator" ? node.parent : null;
+
+      // For functions inside React wrappers: forwardRef, memo
+      if (!varDeclarator) {
+        varDeclarator = getWrappingVariableDeclarator(node);
+      }
+
       let nodeToCheck: TSESTree.Node =
-        node.parent?.type === "VariableDeclarator" &&
-        node.parent.parent?.type === "VariableDeclaration"
-          ? node.parent.parent
+        varDeclarator?.parent?.type === "VariableDeclaration"
+          ? varDeclarator.parent
           : node;
 
       // For exported declarations, the JSDoc sits before `export`, not the
@@ -207,7 +220,7 @@ export default createRule<[], MessageIds>({
             : node.parent?.type === "VariableDeclarator" &&
                 node.parent.id.type === "Identifier"
               ? node.parent.id
-              : node;
+              : getWrappingVariableDeclarator(node)?.id ?? node;
 
         context.report({
           node: reportNode,
