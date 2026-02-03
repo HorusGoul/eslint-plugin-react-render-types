@@ -1,5 +1,11 @@
 # eslint-plugin-react-render-types
 
+## 0.6.0
+
+### Minor Changes
+
+- [#12](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/12) [`566cd91`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/566cd916c3d49cc71ddf6619a0c1e2c1997ed443) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add TypeScript Language Service Plugin that prevents IDEs from greying out or auto-removing imports referenced in `@renders` annotations. Enable in `tsconfig.json` with `{ "plugins": [{ "name": "eslint-plugin-react-render-types/language-service-plugin" }] }`.
+
 ## 0.5.0
 
 ### Minor Changes
