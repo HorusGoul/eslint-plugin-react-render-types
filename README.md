@@ -371,20 +371,20 @@ Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript:
 
 ## Features
 
-| Feature | Supported | Flow equivalent |
-|---------|-----------|-----------------|
-| Required renders | `@renders {Header}` | `renders Header` |
-| Optional renders | `@renders? {Header}` | `renders? Header` |
-| Many renders | `@renders* {Header}` | `renders* Header` |
-| Union types | `@renders {A \| B}` | ✓ (language feature) |
-| Type alias unions | `@renders {MyAlias}` | ✓ (language feature) |
-| Transparent components | `@transparent` | `renders T` |
-| Unchecked (escape hatch) | `@renders! {X}` | — |
-| Expression analysis | ✓ (ternary, `&&`, `.map()`) | ✓ |
-| Chained rendering | ✓ | ✓ |
-| Props / children validation | ✓ | ✓ |
-| Cross-file resolution | ✓ | ✓ |
-| IDE unused import suppression | ✓ (TS language service plugin) | — |
+| Feature | Supported |
+|---------|-----------|
+| Required renders | `@renders {Header}` |
+| Optional renders | `@renders? {Header}` |
+| Many renders | `@renders* {Header}` |
+| Union types | `@renders {A \| B}` |
+| Type alias unions | `@renders {MyAlias}` |
+| Transparent components | `@transparent` |
+| Unchecked (escape hatch) | `@renders! {X}` |
+| Expression analysis | ✓ (ternary, `&&`, `.map()`) |
+| Chained rendering | ✓ |
+| Props / children validation | ✓ |
+| Cross-file resolution | ✓ |
+| IDE unused import suppression | ✓ (TS language service plugin) |
 
 ## Agent Skills
 
