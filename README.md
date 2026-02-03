@@ -380,12 +380,11 @@ Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript:
 | Type alias unions | ✅ `@renders {MyAlias}` |
 | Transparent components | ✅ `@transparent` |
 | Unchecked (escape hatch) | ✅ `@renders! {X}` |
-| Expression analysis | ✅ ternary, `&&`, `.map()` |
+| Expression analysis | 🟡 ternary, `&&`, `.map()` — dynamic rendering requires `@renders!` |
 | Chained rendering | ✅ |
 | Props / children validation | ✅ |
 | Cross-file resolution | ✅ |
 | IDE unused import suppression | ✅ TS language service plugin |
-| Dynamic component rendering | 🟡 Use `@renders!` escape hatch |
 | `forwardRef` / `memo` / `lazy` | 🔲 Not yet supported |
 | Higher-order components | 🔲 Not yet supported |
 | Class components | ⛔ Not supported |
