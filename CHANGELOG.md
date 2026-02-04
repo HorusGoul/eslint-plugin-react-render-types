@@ -1,5 +1,11 @@
 # eslint-plugin-react-render-types
 
+## 0.7.3
+
+### Patch Changes
+
+- [`4f20ed2`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/4f20ed2e470c821e29b2dd8ebe0c53f0cf6bc0e7) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Switch package to ESM (`"type": "module"`) for native ESM support. The language service plugin is now emitted as CJS (`.cjs`) since it uses `export =` syntax required by TypeScript's plugin loader.
+
 ## 0.7.2
 
 ### Patch Changes
