@@ -651,3 +651,367 @@ describe("formatTransparentTagText", () => {
     expect(formatTransparentTagText(input)).toBe(input);
   });
 });
+
+// ---- Completion helpers (replicated from src/language-service-plugin.ts) ----
+
+interface RendersCompletionContext {
+  prefix: string;
+  replacementSpan: { start: number; length: number };
+}
+
+/**
+ * Replicate getRendersCompletionContext from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function getRendersCompletionContext(
+  sourceText: string,
+  position: number,
+): RendersCompletionContext | null {
+  const regex = /(?:^|[^a-zA-Z@])@renders(?:\?|\*)?(?:!)?\s*\{/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(sourceText)) !== null) {
+    const braceOpen = match.index + match[0].length - 1;
+    const braceClose = sourceText.indexOf("}", braceOpen + 1);
+    if (braceClose === -1) continue;
+
+    if (position > braceOpen && position <= braceClose) {
+      const inner = sourceText.substring(braceOpen + 1, position);
+      const lastPipe = inner.lastIndexOf("|");
+      const segmentStart = lastPipe !== -1 ? braceOpen + 1 + lastPipe + 1 : braceOpen + 1;
+      const raw = sourceText.substring(segmentStart, position);
+      const prefix = raw.trimStart();
+      const prefixStart = segmentStart + (raw.length - prefix.length);
+
+      return {
+        prefix,
+        replacementSpan: { start: prefixStart, length: position - prefixStart },
+      };
+    }
+  }
+  return null;
+}
+
+interface ComponentSymbolInfo {
+  name: string;
+  kind: string;
+}
+
+/**
+ * Replicate getComponentSymbols from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function getComponentSymbols(
+  sourceFile: ts.SourceFile,
+): ComponentSymbolInfo[] {
+  const symbols: ComponentSymbolInfo[] = [];
+  const seen = new Set<string>();
+
+  function add(name: string, kind: string) {
+    if (/^[A-Z]/.test(name) && !seen.has(name)) {
+      seen.add(name);
+      symbols.push({ name, kind });
+    }
+  }
+
+  for (const stmt of sourceFile.statements) {
+    if (ts.isImportDeclaration(stmt)) {
+      const clause = stmt.importClause;
+      if (!clause) continue;
+
+      if (clause.name) {
+        add(clause.name.text, "const");
+      }
+
+      const bindings = clause.namedBindings;
+      if (bindings) {
+        if (ts.isNamespaceImport(bindings)) {
+          add(bindings.name.text, "module");
+        }
+        if (ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            add(element.name.text, "const");
+          }
+        }
+      }
+    }
+
+    if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+      add(stmt.name.text, "function");
+    }
+
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name)) {
+          add(decl.name.text, "const");
+        }
+      }
+    }
+  }
+
+  return symbols;
+}
+
+// ---- Find references / rename helpers (replicated from src/language-service-plugin.ts) ----
+
+/**
+ * Replicate findRendersReferencesInFile from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function findRendersReferencesInFile(
+  sourceText: string,
+  componentName: string,
+): { start: number; length: number }[] {
+  const spans = getRendersComponentSpans(sourceText);
+  const results: { start: number; length: number }[] = [];
+  for (const span of spans) {
+    if (span.name === componentName) {
+      results.push({ start: span.start, length: span.name.length });
+    }
+  }
+  return results;
+}
+
+/**
+ * Replicate getIdentifierAtPosition from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function getIdentifierAtPosition(sourceText: string, position: number): string | null {
+  if (position < 0 || position >= sourceText.length) return null;
+  if (!/[a-zA-Z0-9_$]/.test(sourceText[position])) return null;
+
+  let start = position;
+  while (start > 0 && /[a-zA-Z0-9_$]/.test(sourceText[start - 1])) {
+    start--;
+  }
+  let end = position;
+  while (end < sourceText.length - 1 && /[a-zA-Z0-9_$]/.test(sourceText[end + 1])) {
+    end++;
+  }
+  return sourceText.substring(start, end + 1);
+}
+
+// ---- Tests for new helpers ----
+
+describe("getRendersCompletionContext", () => {
+  it("returns empty prefix when cursor is right after opening brace", () => {
+    const text = `/** @renders {} */`;
+    const pos = text.indexOf("{") + 1;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.prefix).toBe("");
+  });
+
+  it("returns prefix when cursor is mid-word", () => {
+    const text = `/** @renders {He} */`;
+    const pos = text.indexOf("He") + 2;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.prefix).toBe("He");
+  });
+
+  it("returns empty prefix after pipe separator", () => {
+    const text = `/** @renders {Header | } */`;
+    const pos = text.indexOf("| ") + 2;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.prefix).toBe("");
+  });
+
+  it("returns prefix after pipe mid-word", () => {
+    const text = `/** @renders {Header | Fo} */`;
+    const pos = text.indexOf("Fo") + 2;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.prefix).toBe("Fo");
+  });
+
+  it("returns null when cursor is outside braces", () => {
+    const text = `/** @renders {Header} */`;
+    const pos = text.indexOf("@renders");
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).toBeNull();
+  });
+
+  it("returns null when cursor is on @renders keyword", () => {
+    const text = `/** @renders {Header} */`;
+    const pos = text.indexOf("renders") + 3;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).toBeNull();
+  });
+
+  it("handles multiple annotations, cursor in second", () => {
+    const text = `/** @renders {Header} */\n/** @renders {Fo} */`;
+    const pos = text.lastIndexOf("Fo") + 2;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.prefix).toBe("Fo");
+  });
+
+  it("handles whitespace variations", () => {
+    const text = `/**  @renders  {  He} */`;
+    const pos = text.indexOf("He") + 2;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.prefix).toBe("He");
+  });
+
+  it("provides correct replacementSpan for prefix", () => {
+    const text = `/** @renders {He} */`;
+    const pos = text.indexOf("He") + 2;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(text.substring(ctx!.replacementSpan.start, ctx!.replacementSpan.start + ctx!.replacementSpan.length)).toBe("He");
+  });
+
+  it("provides correct replacementSpan after pipe with spaces", () => {
+    const text = `/** @renders {Header | Fo} */`;
+    const pos = text.indexOf("Fo") + 2;
+    const ctx = getRendersCompletionContext(text, pos);
+    expect(ctx).not.toBeNull();
+    expect(text.substring(ctx!.replacementSpan.start, ctx!.replacementSpan.start + ctx!.replacementSpan.length)).toBe("Fo");
+  });
+});
+
+describe("getComponentSymbols", () => {
+  function createSourceFile(code: string): ts.SourceFile {
+    return ts.createSourceFile("test.tsx", code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  }
+
+  it("collects named imports", () => {
+    const sf = createSourceFile(`import { Header, Footer } from "./components";`);
+    const symbols = getComponentSymbols(sf);
+    expect(symbols).toContainEqual({ name: "Header", kind: "const" });
+    expect(symbols).toContainEqual({ name: "Footer", kind: "const" });
+  });
+
+  it("collects default imports", () => {
+    const sf = createSourceFile(`import Menu from "./Menu";`);
+    const symbols = getComponentSymbols(sf);
+    expect(symbols).toContainEqual({ name: "Menu", kind: "const" });
+  });
+
+  it("collects namespace imports", () => {
+    const sf = createSourceFile(`import * as UI from "./ui";`);
+    const symbols = getComponentSymbols(sf);
+    expect(symbols).toContainEqual({ name: "UI", kind: "module" });
+  });
+
+  it("collects local function declarations", () => {
+    const sf = createSourceFile(`function Header() { return null; }`);
+    const symbols = getComponentSymbols(sf);
+    expect(symbols).toContainEqual({ name: "Header", kind: "function" });
+  });
+
+  it("collects local arrow functions", () => {
+    const sf = createSourceFile(`const Header = () => null;`);
+    const symbols = getComponentSymbols(sf);
+    expect(symbols).toContainEqual({ name: "Header", kind: "const" });
+  });
+
+  it("filters out lowercase names", () => {
+    const sf = createSourceFile(`import { header } from "./utils";\nconst myVar = 1;`);
+    const symbols = getComponentSymbols(sf);
+    expect(symbols).toEqual([]);
+  });
+
+  it("collects mixed imports and declarations", () => {
+    const sf = createSourceFile(`
+import { Header } from "./Header";
+import Menu from "./Menu";
+function Footer() { return null; }
+const Sidebar = () => null;
+`);
+    const symbols = getComponentSymbols(sf);
+    const names = symbols.map((s) => s.name);
+    expect(names).toContain("Header");
+    expect(names).toContain("Menu");
+    expect(names).toContain("Footer");
+    expect(names).toContain("Sidebar");
+  });
+
+  it("deduplicates names", () => {
+    const sf = createSourceFile(`
+import { Header } from "./Header";
+function Header() { return null; }
+`);
+    const symbols = getComponentSymbols(sf);
+    const headerSymbols = symbols.filter((s) => s.name === "Header");
+    expect(headerSymbols).toHaveLength(1);
+  });
+});
+
+describe("findRendersReferencesInFile", () => {
+  it("finds single match", () => {
+    const text = `/** @renders {Header} */`;
+    const refs = findRendersReferencesInFile(text, "Header");
+    expect(refs).toHaveLength(1);
+    expect(text.substring(refs[0].start, refs[0].start + refs[0].length)).toBe("Header");
+  });
+
+  it("finds name in union", () => {
+    const text = `/** @renders {Header | Footer} */`;
+    const refs = findRendersReferencesInFile(text, "Header");
+    expect(refs).toHaveLength(1);
+    expect(text.substring(refs[0].start, refs[0].start + refs[0].length)).toBe("Header");
+  });
+
+  it("finds base name in namespaced component", () => {
+    const text = `/** @renders {Menu.Item} */`;
+    const refs = findRendersReferencesInFile(text, "Menu");
+    expect(refs).toHaveLength(1);
+    expect(text.substring(refs[0].start, refs[0].start + refs[0].length)).toBe("Menu");
+  });
+
+  it("returns empty for no match", () => {
+    const text = `/** @renders {Header} */`;
+    const refs = findRendersReferencesInFile(text, "Footer");
+    expect(refs).toEqual([]);
+  });
+
+  it("finds multiple annotations in same file", () => {
+    const text = `/** @renders {Header} */\nfunction A() {}\n/** @renders {Header} */\nfunction B() {}`;
+    const refs = findRendersReferencesInFile(text, "Header");
+    expect(refs).toHaveLength(2);
+  });
+
+  it("finds prop annotations", () => {
+    const text = `interface Props {\n  /** @renders {NavItem} */\n  children: React.ReactNode;\n}`;
+    const refs = findRendersReferencesInFile(text, "NavItem");
+    expect(refs).toHaveLength(1);
+    expect(text.substring(refs[0].start, refs[0].start + refs[0].length)).toBe("NavItem");
+  });
+});
+
+describe("getIdentifierAtPosition", () => {
+  it("returns identifier when cursor is at start", () => {
+    const text = `Header Footer`;
+    expect(getIdentifierAtPosition(text, 0)).toBe("Header");
+  });
+
+  it("returns identifier when cursor is in middle", () => {
+    const text = `Header Footer`;
+    expect(getIdentifierAtPosition(text, 3)).toBe("Header");
+  });
+
+  it("returns null on whitespace", () => {
+    const text = `Header Footer`;
+    expect(getIdentifierAtPosition(text, 6)).toBeNull();
+  });
+
+  it("returns null on punctuation", () => {
+    const text = `Header; Footer`;
+    expect(getIdentifierAtPosition(text, 6)).toBeNull();
+  });
+
+  it("handles identifier with numbers", () => {
+    const text = `Header2 Footer`;
+    expect(getIdentifierAtPosition(text, 3)).toBe("Header2");
+  });
+
+  it("returns null for out of bounds position", () => {
+    const text = `Header`;
+    expect(getIdentifierAtPosition(text, -1)).toBeNull();
+    expect(getIdentifierAtPosition(text, 100)).toBeNull();
+  });
+});
+

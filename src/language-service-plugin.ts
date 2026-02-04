@@ -27,6 +27,9 @@ interface RendersComponentSpan {
   length: number; // length of fullName
 }
 
+/** Custom diagnostic code for unresolvable @renders component names */
+const RENDERS_DIAGNOSTIC_CODE = 170001;
+
 /** Diagnostic codes for "declared but never read / never used" */
 const UNUSED_DIAGNOSTIC_CODES = new Set([
   6133, // '{0}' is declared but its value is never read.
@@ -157,6 +160,143 @@ function findLocalDeclarationPosition(
     }
   }
   return null;
+}
+
+interface RendersCompletionContext {
+  prefix: string;
+  replacementSpan: { start: number; length: number };
+}
+
+/**
+ * Determine if the cursor position is inside @renders braces and extract
+ * the typed prefix and replacement span for autocompletion.
+ */
+function getRendersCompletionContext(
+  sourceText: string,
+  position: number,
+): RendersCompletionContext | null {
+  const regex = /(?:^|[^a-zA-Z@])@renders(?:\?|\*)?(?:!)?\s*\{/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(sourceText)) !== null) {
+    const braceOpen = match.index + match[0].length - 1; // position of "{"
+    // Find the matching closing brace
+    const braceClose = sourceText.indexOf("}", braceOpen + 1);
+    if (braceClose === -1) continue;
+
+    if (position > braceOpen && position <= braceClose) {
+      // Cursor is inside braces — find the start of the current segment
+      const inner = sourceText.substring(braceOpen + 1, position);
+      const lastPipe = inner.lastIndexOf("|");
+      const segmentStart = lastPipe !== -1 ? braceOpen + 1 + lastPipe + 1 : braceOpen + 1;
+      const raw = sourceText.substring(segmentStart, position);
+      const prefix = raw.trimStart();
+      const prefixStart = segmentStart + (raw.length - prefix.length);
+
+      return {
+        prefix,
+        replacementSpan: { start: prefixStart, length: position - prefixStart },
+      };
+    }
+  }
+  return null;
+}
+
+interface ComponentSymbolInfo {
+  name: string;
+  kind: string; // ScriptElementKind value
+}
+
+/**
+ * Collect PascalCase component symbols from imports and local declarations
+ * in the given source file for @renders autocompletion.
+ */
+function getComponentSymbols(
+  sourceFile: ts.SourceFile,
+  tsModule: typeof ts,
+): ComponentSymbolInfo[] {
+  const symbols: ComponentSymbolInfo[] = [];
+  const seen = new Set<string>();
+
+  function add(name: string, kind: string) {
+    if (/^[A-Z]/.test(name) && !seen.has(name)) {
+      seen.add(name);
+      symbols.push({ name, kind });
+    }
+  }
+
+  for (const stmt of sourceFile.statements) {
+    if (tsModule.isImportDeclaration(stmt)) {
+      const clause = stmt.importClause;
+      if (!clause) continue;
+
+      if (clause.name) {
+        add(clause.name.text, "const" /* ScriptElementKind.constElement */);
+      }
+
+      const bindings = clause.namedBindings;
+      if (bindings) {
+        if (tsModule.isNamespaceImport(bindings)) {
+          add(bindings.name.text, "module" /* ScriptElementKind.moduleElement */);
+        }
+        if (tsModule.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            add(element.name.text, "const" /* ScriptElementKind.constElement */);
+          }
+        }
+      }
+    }
+
+    if (tsModule.isFunctionDeclaration(stmt) && stmt.name) {
+      add(stmt.name.text, "function" /* ScriptElementKind.functionElement */);
+    }
+
+    if (tsModule.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (tsModule.isIdentifier(decl.name)) {
+          add(decl.name.text, "const" /* ScriptElementKind.constElement */);
+        }
+      }
+    }
+  }
+
+  return symbols;
+}
+
+/**
+ * Find all @renders annotation references to a component name in source text.
+ * Returns spans covering the base name (before first ".") for consistency with imports.
+ */
+function findRendersReferencesInFile(
+  sourceText: string,
+  componentName: string,
+): { start: number; length: number }[] {
+  const spans = getRendersComponentSpans(sourceText);
+  const results: { start: number; length: number }[] = [];
+  for (const span of spans) {
+    if (span.name === componentName) {
+      results.push({ start: span.start, length: span.name.length });
+    }
+  }
+  return results;
+}
+
+/**
+ * Extract the identifier text at a given position in source text.
+ * Scans backward and forward from position to find identifier boundaries.
+ */
+function getIdentifierAtPosition(sourceText: string, position: number): string | null {
+  if (position < 0 || position >= sourceText.length) return null;
+  if (!/[a-zA-Z0-9_$]/.test(sourceText[position])) return null;
+
+  let start = position;
+  while (start > 0 && /[a-zA-Z0-9_$]/.test(sourceText[start - 1])) {
+    start--;
+  }
+  let end = position;
+  while (end < sourceText.length - 1 && /[a-zA-Z0-9_$]/.test(sourceText[end + 1])) {
+    end++;
+  }
+  return sourceText.substring(start, end + 1);
 }
 
 /** Modifier labels for @renders variants */
@@ -363,7 +503,7 @@ function init(modules: { typescript: typeof ts }) {
       const rendersNames = getRendersComponentNames(sourceFile.text);
       if (rendersNames.size === 0) return prior;
 
-      return prior.map((d) => {
+      const result = prior.map((d) => {
         if (!isRendersReferencedImport(d, sourceFile, rendersNames)) return d;
 
         const msg = typeof d.messageText === "string" ? d.messageText : d.messageText.messageText;
@@ -377,6 +517,27 @@ function init(modules: { typescript: typeof ts }) {
           category: tsModule.DiagnosticCategory.Error,
         };
       });
+
+      // Add diagnostics for @renders component names that don't resolve
+      const spans = getRendersComponentSpans(sourceFile.text);
+      for (const span of spans) {
+        const importPos = findImportIdentifierPosition(sourceFile, span.name, tsModule);
+        if (importPos != null) continue;
+        const localPos = findLocalDeclarationPosition(sourceFile, span.name, tsModule);
+        if (localPos != null) continue;
+
+        result.push({
+          file: sourceFile,
+          start: span.start,
+          length: span.length,
+          code: RENDERS_DIAGNOSTIC_CODE,
+          category: tsModule.DiagnosticCategory.Warning,
+          messageText: `'${span.name}' in @renders annotation does not match any import or declaration in this file.`,
+          source: "renders",
+        });
+      }
+
+      return result;
     };
 
     // Resolve a cursor position to a @renders component span and the
@@ -473,6 +634,97 @@ function init(modules: { typescript: typeof ts }) {
       const result = info.languageService.getQuickInfoAtPosition(fileName, position);
       if (!result) return result;
       return formatQuickInfoTags(result, resolver);
+    };
+
+    // Completions: autocomplete component names inside @renders braces
+    proxy.getCompletionsAtPosition = (fileName: string, position: number, options, formattingSettings) => {
+      const program = info.languageService.getProgram();
+      const sourceFile = program?.getSourceFile(fileName);
+      if (!sourceFile) return info.languageService.getCompletionsAtPosition(fileName, position, options, formattingSettings);
+
+      const ctx = getRendersCompletionContext(sourceFile.text, position);
+      if (!ctx) return info.languageService.getCompletionsAtPosition(fileName, position, options, formattingSettings);
+
+      const candidates = getComponentSymbols(sourceFile, tsModule);
+      const lowerPrefix = ctx.prefix.toLowerCase();
+      const entries = candidates
+        .filter((c) => c.name.toLowerCase().startsWith(lowerPrefix))
+        .map((c) => ({
+          name: c.name,
+          kind: c.kind as ts.ScriptElementKind,
+          sortText: "0",
+          replacementSpan: {
+            start: ctx.replacementSpan.start,
+            length: ctx.replacementSpan.length,
+          },
+        }));
+
+      return {
+        isGlobalCompletion: false,
+        isMemberCompletion: false,
+        isNewIdentifierLocation: false,
+        entries,
+      };
+    };
+
+    // Find references: include @renders annotation references across all project files
+    proxy.findReferences = (fileName: string, position: number) => {
+      const prior = info.languageService.findReferences(fileName, position);
+      if (!prior || prior.length === 0) return prior;
+
+      const program = info.languageService.getProgram();
+      const sourceFile = program?.getSourceFile(fileName);
+      if (!sourceFile) return prior;
+
+      const symbolName = getIdentifierAtPosition(sourceFile.text, position);
+      if (!symbolName) return prior;
+
+      const allFiles = program!.getSourceFiles();
+      for (const file of allFiles) {
+        const refs = findRendersReferencesInFile(file.text, symbolName);
+        for (const ref of refs) {
+          prior[0].references.push({
+            textSpan: ref,
+            fileName: file.fileName,
+            isWriteAccess: false,
+            isDefinition: false,
+          });
+        }
+      }
+
+      return prior;
+    };
+
+    // Rename: update @renders annotations when renaming components
+    proxy.findRenameLocations = (fileName: string, position: number, findInStrings: boolean, findInComments: boolean, preferences) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prior = (info.languageService.findRenameLocations as any)(fileName, position, findInStrings, findInComments, preferences) as readonly ts.RenameLocation[] | undefined;
+
+      const program = info.languageService.getProgram();
+      const sourceFile = program?.getSourceFile(fileName);
+      if (!sourceFile) return prior;
+
+      const symbolName = getIdentifierAtPosition(sourceFile.text, position);
+      if (!symbolName) return prior;
+
+      const result = prior ? [...prior] : [];
+      const seen = new Set(result.map((r) => `${r.fileName}:${r.textSpan.start}`));
+
+      const allFiles = program!.getSourceFiles();
+      for (const file of allFiles) {
+        const refs = findRendersReferencesInFile(file.text, symbolName);
+        for (const ref of refs) {
+          const key = `${file.fileName}:${ref.start}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          result.push({
+            textSpan: ref,
+            fileName: file.fileName,
+          });
+        }
+      }
+
+      return result;
     };
 
     return proxy;
