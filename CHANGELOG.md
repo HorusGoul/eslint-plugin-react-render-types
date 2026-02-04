@@ -1,5 +1,13 @@
 # eslint-plugin-react-render-types
 
+## 0.7.5
+
+### Patch Changes
+
+- [#23](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/23) [`ab12d88`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/ab12d88e98ef62480b2703d16ebf096d502122b2) Thanks [@HorusGoul](https://github.com/HorusGoul)! - fix: validate children inside JSX fragments in `valid-render-prop` rule
+
+  Previously, components wrapped in JSX fragments (`<>...</>`) were silently skipped during children validation. This meant neither valid nor invalid children inside fragments were checked against `@renders` annotations. Now fragments are recursively unwrapped in both `validateJSXChildren` and `extractChildElementNames`.
+
 ## 0.7.4
 
 ### Patch Changes
