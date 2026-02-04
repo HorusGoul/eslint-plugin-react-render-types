@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-react-render-types",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "type": "module",
   "description": "ESLint plugin that brings Flow's Render Types to TypeScript via JSDoc comments",
   "main": "dist/index.js",

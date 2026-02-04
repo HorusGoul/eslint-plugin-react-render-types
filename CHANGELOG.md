@@ -1,5 +1,11 @@
 # eslint-plugin-react-render-types
 
+## 0.7.4
+
+### Patch Changes
+
+- [`f51a0e4`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/f51a0e46bc73958e73ee390a793131f83d1e98ca) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Fix @renders annotation resolution through barrel/re-export imports. Components imported via barrel files (e.g., `export { X } from "./X"`) now correctly resolve their render chain for validation.
+
 ## 0.7.3
 
 ### Patch Changes
