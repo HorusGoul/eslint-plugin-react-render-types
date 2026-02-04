@@ -549,6 +549,38 @@ ruleTester.run("valid-render-prop", rule, {
       },
     },
 
+    {
+      name: "nested transparent wrappers in children",
+      code: withComponents(
+        `
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        /** @transparent */
+        function ErrorBoundary({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        <Tabs>
+          <Suspense fallback={null}>
+            <ErrorBoundary>
+              <Tab id="a" />
+            </ErrorBoundary>
+          </Suspense>
+        </Tabs>;
+      `,
+        ["Tab", "Tabs", "Suspense"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
+        },
+      },
+    },
+
     // Component with @renders* used as child of union @renders* parent
     {
       name: "component with @renders* used as child of @renders* union parent",
@@ -1138,6 +1170,47 @@ ruleTester.run("valid-render-prop", rule, {
       settings: {
         "react-render-types": {
           additionalTransparentComponents: ["React.Suspense"],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "Tab",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+
+    {
+      name: "nested transparent wrappers with wrong child in children",
+      code: withComponents(
+        `
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        /** @transparent */
+        function ErrorBoundary({ children }: { children: React.ReactNode }) {
+          return <div>{children}</div>;
+        }
+
+        <Tabs>
+          <Suspense fallback={null}>
+            <ErrorBoundary>
+              <Footer />
+            </ErrorBoundary>
+          </Suspense>
+        </Tabs>;
+      `,
+        ["Tab", "Tabs", "Suspense", "Footer"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["Suspense"],
         },
       },
       errors: [
