@@ -154,6 +154,20 @@ For member expressions like `<React.Suspense>`, use the dotted form: `"React.Sus
 
 These merge with `@transparent` JSDoc annotations — both sources are combined. `@transparent` annotations work cross-file automatically via TypeScript's type checker.
 
+### `additionalComponentWrappers`
+
+The plugin recognizes `forwardRef` and `memo` as component wrappers by default. If you use other wrapper functions (e.g., MobX's `observer`, styled-components' `styled`), add them so the plugin can detect `@renders` annotations on wrapped components:
+
+```javascript
+settings: {
+  "react-render-types": {
+    additionalComponentWrappers: ["observer", "styled"],
+  },
+},
+```
+
+This matches both direct calls (`observer(...)`) and member expressions (`mobx.observer(...)`).
+
 ## IDE Integration: Unused Import Suppression
 
 When a component is imported only for use in a `@renders` annotation, the IDE will grey it out as unused and may auto-remove it on save. The plugin includes a TypeScript Language Service Plugin that suppresses those false positives.

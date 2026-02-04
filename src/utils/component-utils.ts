@@ -26,6 +26,72 @@ export function getJSXElementName(node: TSESTree.JSXElement): string | null {
   return resolveJSXName(name);
 }
 
+const REACT_WRAPPER_NAMES = new Set(["forwardRef", "memo"]);
+
+/**
+ * Check if a CallExpression is a known React wrapper (forwardRef, memo, or user-configured).
+ * Matches both `forwardRef(...)` and `React.forwardRef(...)`.
+ */
+export function isReactWrapperCall(
+  node: TSESTree.CallExpression,
+  additionalWrappers?: Set<string>
+): boolean {
+  const { callee } = node;
+
+  if (callee.type === "Identifier") {
+    return REACT_WRAPPER_NAMES.has(callee.name) || (additionalWrappers?.has(callee.name) ?? false);
+  }
+
+  if (
+    callee.type === "MemberExpression" &&
+    callee.object.type === "Identifier" &&
+    callee.property.type === "Identifier"
+  ) {
+    return REACT_WRAPPER_NAMES.has(callee.property.name) || (additionalWrappers?.has(callee.property.name) ?? false);
+  }
+
+  return false;
+}
+
+type FunctionNode =
+  | TSESTree.FunctionDeclaration
+  | TSESTree.FunctionExpression
+  | TSESTree.ArrowFunctionExpression;
+
+/**
+ * Walk up from a function node through React wrapper calls (forwardRef, memo)
+ * to find the enclosing VariableDeclarator, if any.
+ *
+ * Handles patterns like:
+ *   const X = forwardRef((props, ref) => ...)
+ *   const X = memo(() => ...)
+ *   const X = memo(forwardRef((props, ref) => ...))
+ */
+export function getWrappingVariableDeclarator(
+  node: FunctionNode,
+  additionalWrappers?: Set<string>
+): TSESTree.VariableDeclarator | null {
+  let current: TSESTree.Node = node;
+
+  // Walk up through CallExpression layers that are React wrappers
+  while (
+    current.parent?.type === "CallExpression" &&
+    isReactWrapperCall(current.parent, additionalWrappers)
+  ) {
+    current = current.parent;
+  }
+
+  // Check if we arrived at a VariableDeclarator
+  if (
+    current.parent?.type === "VariableDeclarator" &&
+    current.parent.id.type === "Identifier"
+  ) {
+    return current.parent;
+  }
+
+  return null;
+}
+
 /**
  * Recursively resolve a JSX name to a string
  */

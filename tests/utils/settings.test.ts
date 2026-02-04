@@ -103,6 +103,44 @@ describe("getPluginSettings", () => {
     expect(result.transparentComponentsMap.size).toBe(0);
   });
 
+  // --- additionalComponentWrappers ---
+
+  it("returns empty set when no additionalComponentWrappers", () => {
+    const result = getPluginSettings({});
+    expect(result.additionalComponentWrappers.size).toBe(0);
+  });
+
+  it("parses additionalComponentWrappers string entries", () => {
+    const result = getPluginSettings({
+      "react-render-types": {
+        additionalComponentWrappers: ["observer", "styled"],
+      },
+    });
+    expect(result.additionalComponentWrappers).toEqual(
+      new Set(["observer", "styled"])
+    );
+  });
+
+  it("filters out invalid wrapper entries", () => {
+    const result = getPluginSettings({
+      "react-render-types": {
+        additionalComponentWrappers: ["observer", 42, null, "", "styled"],
+      },
+    });
+    expect(result.additionalComponentWrappers).toEqual(
+      new Set(["observer", "styled"])
+    );
+  });
+
+  it("ignores non-array additionalComponentWrappers", () => {
+    const result = getPluginSettings({
+      "react-render-types": {
+        additionalComponentWrappers: "observer",
+      },
+    });
+    expect(result.additionalComponentWrappers.size).toBe(0);
+  });
+
   it("filters out object entries with empty props array items", () => {
     const result = getPluginSettings({
       "react-render-types": {

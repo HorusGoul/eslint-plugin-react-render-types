@@ -2,7 +2,7 @@ import type { TSESTree } from "@typescript-eslint/utils";
 import { ESLintUtils } from "@typescript-eslint/utils";
 import { createRule } from "../utils/create-rule.js";
 import { parseRendersAnnotation, parseTransparentAnnotation } from "../utils/jsdoc-parser.js";
-import { getJSXElementName, isComponentName } from "../utils/component-utils.js";
+import { getJSXElementName, isComponentName, getWrappingVariableDeclarator } from "../utils/component-utils.js";
 import { extractChildElementNames, extractJSXFromExpression } from "../utils/jsx-extraction.js";
 import { canRenderComponentTyped } from "../utils/render-chain.js";
 import { createCrossFileResolver } from "../utils/cross-file-resolver.js";
@@ -49,7 +49,7 @@ export default createRule<[], MessageIds>({
     const localTransparentComponents = new Map<string, Set<string>>();
 
     // Settings-based transparent components (remain name-based)
-    const { transparentComponentsMap: settingsTransparentComponents } = getPluginSettings(context.settings);
+    const { transparentComponentsMap: settingsTransparentComponents, additionalComponentWrappers } = getPluginSettings(context.settings);
 
     // Merged transparency map: built at Program:exit from settings + local + cross-file
     let transparentComponents = new Map<string, Set<string>>();
@@ -78,6 +78,12 @@ export default createRule<[], MessageIds>({
         return node.parent.id.name;
       }
 
+      // For functions inside React wrappers: forwardRef((props, ref) => ...), memo(() => ...)
+      const wrapper = getWrappingVariableDeclarator(node, additionalComponentWrappers);
+      if (wrapper) {
+        return wrapper.id.type === "Identifier" ? wrapper.id.name : null;
+      }
+
       return null;
     }
 
@@ -86,10 +92,17 @@ export default createRule<[], MessageIds>({
      */
     function getRendersAnnotation(node: FunctionNode): RendersAnnotation | null {
       // For variable declarations (const MyComp = () => ...), check parent
+      let varDeclarator: TSESTree.VariableDeclarator | null =
+        node.parent?.type === "VariableDeclarator" ? node.parent : null;
+
+      // For functions inside React wrappers: forwardRef, memo
+      if (!varDeclarator) {
+        varDeclarator = getWrappingVariableDeclarator(node, additionalComponentWrappers);
+      }
+
       let nodeToCheck: TSESTree.Node =
-        node.parent?.type === "VariableDeclarator" &&
-        node.parent.parent?.type === "VariableDeclaration"
-          ? node.parent.parent
+        varDeclarator?.parent?.type === "VariableDeclaration"
+          ? varDeclarator.parent
           : node;
 
       // For exported declarations, the JSDoc sits before `export`
@@ -190,10 +203,16 @@ export default createRule<[], MessageIds>({
      * Get the @transparent annotation from a function node's leading comments
      */
     function getTransparentAnnotation(node: FunctionNode): TransparentAnnotation | null {
+      let varDeclarator: TSESTree.VariableDeclarator | null =
+        node.parent?.type === "VariableDeclarator" ? node.parent : null;
+
+      if (!varDeclarator) {
+        varDeclarator = getWrappingVariableDeclarator(node, additionalComponentWrappers);
+      }
+
       let nodeToCheck: TSESTree.Node =
-        node.parent?.type === "VariableDeclarator" &&
-        node.parent.parent?.type === "VariableDeclaration"
-          ? node.parent.parent
+        varDeclarator?.parent?.type === "VariableDeclaration"
+          ? varDeclarator.parent
           : node;
 
       if (

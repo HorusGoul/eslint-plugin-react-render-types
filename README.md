@@ -148,6 +148,20 @@ For member expressions like `<React.Suspense>`, use the dotted form: `"React.Sus
 
 These work alongside `@transparent` JSDoc annotations — both sources are merged. `@transparent` annotations are resolved cross-file automatically via TypeScript's type checker, so settings are only needed for components you can't annotate with JSDoc.
 
+#### `additionalComponentWrappers`
+
+The plugin recognizes `forwardRef` and `memo` as component wrappers by default. If you use other wrapper functions (e.g., MobX's `observer`, styled-components' `styled`), add them here so the plugin can detect `@renders` annotations on wrapped components:
+
+```javascript
+settings: {
+  "react-render-types": {
+    additionalComponentWrappers: ["observer", "styled"],
+  },
+},
+```
+
+This matches both direct calls (`observer(...)`) and member expressions (`mobx.observer(...)`).
+
 ## Rules
 
 | Rule | Default | Description |
@@ -372,8 +386,8 @@ Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript:
 ## Limitations
 
 - **Dynamic rendering** — Component registries and computed JSX (`componentMap[type]`) can't be statically analyzed. Use `@renders!` to skip return validation while still declaring the render type.
-- **`forwardRef` / `memo` / `lazy`** — Wrapped components are not yet recognized for annotation detection.
-- **Higher-order components** — Arbitrary HOC patterns can't be followed. Use `@renders!` on the wrapped component.
+- **`React.lazy`** — Lazy-loaded components can't be statically followed. Use `@renders!` to declare the render type.
+- **Higher-order components** — Arbitrary HOC patterns can't be followed. Use `@renders!` on the wrapped component, or add the wrapper to [`additionalComponentWrappers`](#additionalcomponentwrappers) if it follows the same pattern as `forwardRef`/`memo`.
 - **Class components** — Only function components are supported.
 
 ## Agent Skills

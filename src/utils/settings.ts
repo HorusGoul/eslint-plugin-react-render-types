@@ -3,9 +3,11 @@ import type { TSESLint } from "@typescript-eslint/utils";
 /**
  * Parsed plugin settings.
  * transparentComponentsMap: component name → set of prop names to extract JSX from.
+ * additionalComponentWrappers: extra wrapper function names treated like forwardRef/memo.
  */
 export interface PluginSettings {
   transparentComponentsMap: Map<string, Set<string>>;
+  additionalComponentWrappers: Set<string>;
 }
 
 /**
@@ -57,5 +59,15 @@ export function getPluginSettings(
     }
   }
 
-  return { transparentComponentsMap: map };
+  const wrappers = new Set<string>();
+
+  if (Array.isArray(raw.additionalComponentWrappers)) {
+    for (const item of raw.additionalComponentWrappers) {
+      if (typeof item === "string" && item.length > 0) {
+        wrappers.add(item);
+      }
+    }
+  }
+
+  return { transparentComponentsMap: map, additionalComponentWrappers: wrappers };
 }

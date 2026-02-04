@@ -969,6 +969,123 @@ ruleTester.run("valid-render-return", rule, {
         },
       },
     },
+
+    // --- forwardRef / memo support ---
+    {
+      name: "forwardRef with @renders returns correct component",
+      code: withComponents(
+        `
+        declare const forwardRef: typeof import('react').forwardRef;
+        /** @renders {Header} */
+        const MyHeader = forwardRef<HTMLDivElement, {}>((props, ref) => {
+          return <Header />;
+        });
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "React.forwardRef with @renders returns correct component",
+      code: withComponents(
+        `
+        import React from 'react';
+        /** @renders {Header} */
+        const MyHeader = React.forwardRef<HTMLDivElement, {}>((props, ref) => {
+          return <Header />;
+        });
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "memo with @renders returns correct component",
+      code: withComponents(
+        `
+        declare const memo: typeof import('react').memo;
+        /** @renders {Header} */
+        const MyHeader = memo(() => <Header />);
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "React.memo with @renders returns correct component",
+      code: withComponents(
+        `
+        import React from 'react';
+        /** @renders {Header} */
+        const MyHeader = React.memo(() => <Header />);
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "memo(forwardRef(...)) with @renders returns correct component",
+      code: withComponents(
+        `
+        declare const memo: typeof import('react').memo;
+        declare const forwardRef: typeof import('react').forwardRef;
+        /** @renders {Header} */
+        const MyHeader = memo(forwardRef<HTMLDivElement, {}>((props, ref) => {
+          return <Header />;
+        }));
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "exported forwardRef with @renders returns correct component",
+      code: withComponents(
+        `
+        declare const forwardRef: typeof import('react').forwardRef;
+        /** @renders {Header} */
+        export const MyHeader = forwardRef<HTMLDivElement, {}>((props, ref) => {
+          return <Header />;
+        });
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+    },
+    {
+      name: "custom wrapper via additionalComponentWrappers setting",
+      code: withComponents(
+        `
+        declare function observer(component: any): any;
+        /** @renders {Header} */
+        const MyHeader = observer(() => <Header />);
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalComponentWrappers: ["observer"],
+        },
+      },
+    },
+    {
+      name: "custom wrapper with member expression via settings",
+      code: withComponents(
+        `
+        declare const mobx: { observer: (component: any) => any };
+        /** @renders {Header} */
+        const MyHeader = mobx.observer(() => <Header />);
+      `,
+        ["Header"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalComponentWrappers: ["observer"],
+        },
+      },
+    },
   ],
   invalid: [
     // Wrong component returned
@@ -1693,6 +1810,76 @@ ruleTester.run("valid-render-return", rule, {
           data: {
             expected: "CardWidget",
             actual: "Banner",
+          },
+        },
+      ],
+    },
+
+    // --- forwardRef / memo invalid cases ---
+    {
+      name: "forwardRef with @renders returns wrong component",
+      code: withComponents(
+        `
+        declare const forwardRef: typeof import('react').forwardRef;
+        /** @renders {Header} */
+        const MyHeader = forwardRef<HTMLDivElement, {}>((props, ref) => {
+          return <Footer />;
+        });
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    {
+      name: "memo with @renders returns wrong component",
+      code: withComponents(
+        `
+        declare const memo: typeof import('react').memo;
+        /** @renders {Header} */
+        const MyHeader = memo(() => <Footer />);
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
+          },
+        },
+      ],
+    },
+    {
+      name: "memo(forwardRef(...)) with @renders returns wrong component",
+      code: withComponents(
+        `
+        declare const memo: typeof import('react').memo;
+        declare const forwardRef: typeof import('react').forwardRef;
+        /** @renders {Header} */
+        const MyHeader = memo(forwardRef<HTMLDivElement, {}>((props, ref) => {
+          return <Footer />;
+        }));
+      `,
+        ["Header", "Footer"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderReturn",
+          data: {
+            expected: "Header",
+            actual: "Footer",
           },
         },
       ],
