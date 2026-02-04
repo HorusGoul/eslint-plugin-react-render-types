@@ -411,4 +411,4 @@ npx skills add HorusGoul/eslint-plugin-react-render-types
 
 ## License
 
-MIT
+[MIT](./LICENSE)
