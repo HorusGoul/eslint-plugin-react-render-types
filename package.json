@@ -1,6 +1,7 @@
 {
   "name": "eslint-plugin-react-render-types",
   "version": "0.7.2",
+  "type": "module",
   "description": "ESLint plugin that brings Flow's Render Types to TypeScript via JSDoc comments",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,14 +12,14 @@
       "require": "./dist/index.js"
     },
     "./lsp": {
-      "types": "./dist/language-service-plugin.d.ts",
-      "import": "./dist/language-service-plugin.js",
-      "require": "./dist/language-service-plugin.js"
+      "types": "./dist/language-service-plugin.d.cts",
+      "import": "./dist/language-service-plugin.cjs",
+      "require": "./dist/language-service-plugin.cjs"
     }
   },
   "files": [
     "dist",
-    "lsp.js"
+    "lsp.cjs"
   ],
   "scripts": {
     "build": "tsc",

@@ -1,8 +1,5 @@
 import tseslint from "typescript-eslint";
-import reactRenderTypesModule from "eslint-plugin-react-render-types";
-
-// Handle CommonJS/ESM interop - the default export is nested
-const reactRenderTypes = reactRenderTypesModule.default || reactRenderTypesModule;
+import reactRenderTypes from "eslint-plugin-react-render-types";
 
 export default tseslint.config(
   ...tseslint.configs.recommended,
