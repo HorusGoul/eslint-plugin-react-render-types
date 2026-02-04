@@ -8,9 +8,10 @@ src/features/invalid-usage/InvalidUsage.tsx
    58:26  error    Prop 'header' expects @renders `PageHeader` but received `div`                                                                   react-render-types/valid-render-prop
    72:3   error    Component annotated with @renders `StatCard` but returns `NavItem`                                                               react-render-types/valid-render-return
    83:7   error    Children expect @renders `DashboardCard` but received `NavItem`                                                                  react-render-types/valid-render-prop
-   94:1   warning  @renders annotation is missing braces. Use: @renders {DashboardCard}                                                             react-render-types/valid-renders-jsdoc
-  100:1   warning  Component name 'dashboardCard' should be PascalCase. Component names must be PascalCase. Did you mean @renders {DashboardCard}?  react-render-types/valid-renders-jsdoc
-  106:1   warning  Malformed @renders annotation. Provide a component name inside braces: @renders {ComponentName}                                  react-render-types/valid-renders-jsdoc
+  100:7   error    Children expect @renders `NavItem` but received `BarrelNavSection`                                                               react-render-types/valid-render-prop
+  109:1   warning  @renders annotation is missing braces. Use: @renders {DashboardCard}                                                             react-render-types/valid-renders-jsdoc
+  115:1   warning  Component name 'dashboardCard' should be PascalCase. Component names must be PascalCase. Did you mean @renders {DashboardCard}?  react-render-types/valid-renders-jsdoc
+  121:1   warning  Malformed @renders annotation. Provide a component name inside braces: @renders {ComponentName}                                  react-render-types/valid-renders-jsdoc
 
-✖ 11 problems (8 errors, 3 warnings)
+✖ 12 problems (9 errors, 3 warnings)
 

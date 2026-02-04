@@ -518,6 +518,30 @@ ruleTester.run("valid-render-prop", rule, {
       },
     },
 
+    // Component with @renders* used as child of union @renders* parent
+    {
+      name: "component with @renders* used as child of @renders* union parent",
+      code: withComponents(
+        `
+        /** @renders* {NavItem} */
+        function NavItems({ links }: { links: string[] }) {
+          return <>{links.map(link => <NavItem key={link} />)}</>;
+        }
+
+        interface NavProps {
+          /** @renders* {NavItem | NavGroup} */
+          children: React.ReactNode;
+        }
+
+        <Nav>
+          <NavItems links={["a", "b"]} />
+          <NavGroup />
+        </Nav>;
+      `,
+        ["NavItem", "NavGroup", "Nav"]
+      ),
+      filename: "test.tsx",
+    },
     // --- Named prop transparency (JSDoc @transparent {props}) ---
     {
       name: "transparent named prop extracts from off prop and children",

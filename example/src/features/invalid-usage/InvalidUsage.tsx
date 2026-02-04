@@ -88,7 +88,22 @@ function BadFlagUsage() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. valid-renders-jsdoc: Malformed annotations
+// 5. valid-render-prop: Wrong component via barrel import
+// ---------------------------------------------------------------------------
+
+import { Sidebar as BarrelSidebar, NavSection as BarrelNavSection } from "@/design-system/nav";
+
+function BadBarrelUsage() {
+  return (
+    // ERROR: NavSection is not NavItem — expects @renders* {NavItem} (via barrel)
+    <BarrelSidebar title="Bad">
+      <BarrelNavSection title="Reports" items={[]} />
+    </BarrelSidebar>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 6. valid-renders-jsdoc: Malformed annotations
 // ---------------------------------------------------------------------------
 
 /** @renders DashboardCard */
@@ -116,6 +131,7 @@ void NullCard;
 void BadChildrenUsage;
 void BadUnionCard;
 void BadFlagUsage;
+void BadBarrelUsage;
 void MissingBraces;
 void LowercaseName;
 void EmptyBraces;

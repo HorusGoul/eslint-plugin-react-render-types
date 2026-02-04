@@ -598,9 +598,23 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
         const expandedAnnotation = expandTypeAliases(annotation);
 
         // Resolve target type IDs from the SOURCE file where the annotation lives,
-        // not from the consumer file (the target may not be imported in the consumer)
-        const sourceFile = resolveImportSourceFile(importInfo.importDeclaration);
-        const scopeNode = sourceFile ?? currentSourceFile;
+        // not from the consumer file (the target may not be imported in the consumer).
+        // We resolve the symbol to its actual declaration file rather than using
+        // resolveImportSourceFile, because barrel/re-export files don't have the
+        // annotation targets as local names in scope.
+        let scopeNode: ts.Node = currentSourceFile;
+        const importedSymbol = typeChecker.resolveName(
+          localName,
+          currentSourceFile,
+          ts.SymbolFlags.Value | ts.SymbolFlags.Alias,
+          /* excludeGlobals */ false
+        );
+        if (importedSymbol) {
+          const decl = resolveSymbolToDeclaration(importedSymbol);
+          if (decl) {
+            scopeNode = decl.getSourceFile();
+          }
+        }
 
         const targetTypeId = getComponentTypeIdInScope(
           expandedAnnotation.componentName,

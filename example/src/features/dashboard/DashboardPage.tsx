@@ -6,8 +6,7 @@ import {
   BarChart3,
   FileText,
 } from "lucide-react";
-import { NavLink } from "@/design-system/nav/NavLink";
-import { NavSection } from "@/design-system/nav/NavSection";
+import { NavLink, NavItems, NavSection } from "@/design-system/nav";
 import { PageLayout } from "@/design-system/layout/PageLayout";
 import { PageHeader } from "@/design-system/layout/PageHeader";
 import { PageContent } from "@/design-system/layout/PageContent";
@@ -40,21 +39,13 @@ export function DashboardPage() {
       title="Acme Dashboard"
       navigation={
         <>
-          <NavLink
-            icon={<LayoutDashboard className="h-4 w-4" />}
-            label="Dashboard"
-            href="/"
-            active
-          />
-          <NavLink
-            icon={<Users className="h-4 w-4" />}
-            label="Customers"
-            href="/customers"
-          />
-          <NavLink
-            icon={<ShoppingCart className="h-4 w-4" />}
-            label="Orders"
-            href="/orders"
+          {/* NavItems imported via barrel — renders NavItem, valid in NavItem | NavSection */}
+          <NavItems
+            links={[
+              { icon: <LayoutDashboard className="h-4 w-4" />, label: "Dashboard", href: "/", active: true },
+              { icon: <Users className="h-4 w-4" />, label: "Customers", href: "/customers" },
+              { icon: <ShoppingCart className="h-4 w-4" />, label: "Orders", href: "/orders" },
+            ]}
           />
           <NavSection
             title="Reports"

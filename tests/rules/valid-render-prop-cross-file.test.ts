@@ -60,6 +60,60 @@ ruleTester.run("valid-render-prop (cross-file)", rule, {
       `,
       filename: path.resolve(fixturesDir, "consumer.tsx"),
     },
+    // Component with @renders* used as child of @renders* parent (cross-file)
+    {
+      name: "cross-file: component with @renders* in @renders* children",
+      code: `
+        import { Sidebar } from "./Sidebar";
+        import { NavItems } from "./NavItems";
+
+        <Sidebar>
+          <NavItems links={["Home", "About"]} />
+        </Sidebar>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+    },
+    // Component with @renders* {NavItem} used as child of @renders* {NavItem | NavGroup} parent
+    {
+      name: "cross-file: @renders* component in union @renders* children",
+      code: `
+        import { Nav } from "./Nav";
+        import { NavItems } from "./NavItems";
+        import { NavGroup } from "./NavGroup";
+
+        <Nav>
+          <NavItems links={["Home", "About"]} />
+          <NavGroup title="Admin" />
+        </Nav>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+    },
+    // Component with @renders* via barrel import
+    {
+      name: "cross-file: @renders* component via barrel import in union children",
+      code: `
+        import { Nav, NavItems, NavGroup } from "./barrel";
+
+        <Nav>
+          <NavItems links={["Home", "About"]} />
+          <NavGroup title="Admin" />
+        </Nav>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+    },
+    // Component with @renders* via deep barrel (2-level re-export)
+    {
+      name: "cross-file: @renders* component via deep barrel import",
+      code: `
+        import { Nav, NavItems, NavGroup } from "./deep-barrel";
+
+        <Nav>
+          <NavItems links={["Home", "About"]} />
+          <NavGroup title="Admin" />
+        </Nav>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+    },
   ],
   invalid: [
     // Unannotated component in cross-file @renders* children
@@ -103,6 +157,27 @@ ruleTester.run("valid-render-prop (cross-file)", rule, {
           messageId: "invalidRenderChildren",
           data: {
             expected: "NavItem",
+            actual: "NavSection",
+          },
+        },
+      ],
+    },
+    // Unannotated component via barrel import in union children
+    {
+      name: "cross-file: unannotated component via barrel import in union children",
+      code: `
+        import { Nav, NavSection } from "./barrel";
+
+        <Nav>
+          <NavSection title="Reports" />
+        </Nav>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "NavItem | NavGroup",
             actual: "NavSection",
           },
         },
