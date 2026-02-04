@@ -402,3 +402,252 @@ describe("findImportIdentifierPosition", () => {
     expect(sf.text.substring(pos!, pos! + "Footer".length)).toBe("Footer");
   });
 });
+
+// ---- Hover tag formatting (replicated from src/language-service-plugin.ts) ----
+
+interface SymbolDisplayPart {
+  kind: string;
+  text: string;
+}
+
+const MODIFIER_LABELS: Record<string, string> = {
+  "?": "optional",
+  "*": "zero or more",
+  "!": "unchecked",
+};
+
+interface JSDocTagInfo {
+  name: string;
+  text?: SymbolDisplayPart[];
+}
+
+interface DefinitionTarget {
+  fileName: string;
+  textSpan: { start: number; length: number };
+}
+
+type DefinitionResolver = (componentName: string) => DefinitionTarget | null;
+
+/**
+ * Replicate formatRendersTag from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function formatRendersTag(
+  tag: JSDocTagInfo,
+  resolveDefinition?: DefinitionResolver,
+): JSDocTagInfo | null {
+  if (!tag.text || tag.text.length === 0) return null;
+
+  const rawText = tag.text.map((p) => p.text).join("");
+
+  let modifier = "";
+  let name = tag.name;
+  const nameModifierMatch = name.match(/^renders([?*]?!?)$/);
+  if (nameModifierMatch && nameModifierMatch[1]) {
+    modifier = nameModifierMatch[1];
+  } else {
+    const textModifierMatch = rawText.match(/^([?*]!?|!)\s*\{/);
+    if (textModifierMatch && textModifierMatch[1]) {
+      modifier = textModifierMatch[1];
+      name = `renders${modifier}`;
+    }
+  }
+
+  const contentMatch = rawText.match(/[?*]*!?\s*\{\s*([^}]+)\s*\}/);
+  if (!contentMatch) return null;
+
+  const typeContent = contentMatch[1].trim();
+  const parts: SymbolDisplayPart[] = [];
+
+  const typeNames = typeContent.split("|");
+  typeNames.forEach((typeName, i) => {
+    const trimmed = typeName.trim();
+    if (!trimmed) return;
+    if (i > 0) {
+      parts.push({ kind: "text", text: " | " });
+    }
+
+    const baseName = trimmed.split(".")[0];
+    const target = resolveDefinition?.(baseName);
+    if (target) {
+      parts.push({ kind: "link", text: "{@linkcode " });
+      (parts as any[]).push({ kind: "linkName", text: trimmed, target });
+      parts.push({ kind: "link", text: "}" });
+    } else {
+      parts.push({ kind: "text", text: `\`${trimmed}\`` });
+    }
+  });
+
+  const label = MODIFIER_LABELS[modifier] ?? MODIFIER_LABELS[modifier[0]];
+  if (label) {
+    parts.push({ kind: "text", text: ` — *${label}*` });
+  }
+
+  return { name, text: parts };
+}
+
+/**
+ * Replicate formatTransparentTagText from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function formatTransparentTagText(
+  text: SymbolDisplayPart[] | undefined,
+): SymbolDisplayPart[] | undefined {
+  if (!text || text.length === 0) return text;
+
+  const rawText = text.map((p) => p.text).join("");
+  const match = rawText.match(/\{\s*([^}]*)\s*\}/);
+  if (!match) return text;
+
+  const propContent = match[1].trim();
+  if (!propContent) return text;
+
+  const propNames = propContent.split(",").map((n) => n.trim()).filter(Boolean);
+  const formatted = propNames.map((n) => `\`${n}\``).join(", ");
+
+  return [{ kind: "text", text: formatted }];
+}
+
+/** Helper to extract plain text from display parts */
+function partsToText(parts: SymbolDisplayPart[] | undefined): string {
+  return parts?.map((p) => p.text).join("") ?? "";
+}
+
+describe("formatRendersTag", () => {
+  it("formats single component with backticks (no resolver)", () => {
+    const result = formatRendersTag({ name: "renders", text: [{ kind: "text", text: "{Header}" }] });
+    expect(result).not.toBeNull();
+    expect(partsToText(result!.text)).toBe("`Header`");
+  });
+
+  it("formats union types with backticks and pipes (no resolver)", () => {
+    const result = formatRendersTag({ name: "renders", text: [{ kind: "text", text: "{Header | Footer}" }] });
+    expect(partsToText(result!.text)).toBe("`Header` | `Footer`");
+  });
+
+  it("formats namespaced component with backticks (no resolver)", () => {
+    const result = formatRendersTag({ name: "renders", text: [{ kind: "text", text: "{Menu.Item}" }] });
+    expect(partsToText(result!.text)).toBe("`Menu.Item`");
+  });
+
+  it("appends italic (optional) for ? modifier and keeps tag name", () => {
+    const result = formatRendersTag({ name: "renders?", text: [{ kind: "text", text: "{Header}" }] });
+    expect(result!.name).toBe("renders?");
+    expect(partsToText(result!.text)).toBe("`Header` — *optional*");
+  });
+
+  it("appends italic (zero or more) for * modifier", () => {
+    const result = formatRendersTag({ name: "renders*", text: [{ kind: "text", text: "{NavItem}" }] });
+    expect(result!.name).toBe("renders*");
+    expect(partsToText(result!.text)).toBe("`NavItem` — *zero or more*");
+  });
+
+  it("appends italic (unchecked) for ! modifier", () => {
+    const result = formatRendersTag({ name: "renders!", text: [{ kind: "text", text: "{Header}" }] });
+    expect(result!.name).toBe("renders!");
+    expect(partsToText(result!.text)).toBe("`Header` — *unchecked*");
+  });
+
+  it("moves modifier from text prefix into tag name", () => {
+    const result = formatRendersTag({ name: "renders", text: [{ kind: "text", text: "? {Header}" }] });
+    expect(result!.name).toBe("renders?");
+    expect(partsToText(result!.text)).toBe("`Header` — *optional*");
+  });
+
+  it("returns null when no braces in text", () => {
+    expect(formatRendersTag({ name: "renders", text: [{ kind: "text", text: "no braces" }] })).toBeNull();
+  });
+
+  it("returns null for undefined text", () => {
+    expect(formatRendersTag({ name: "renders", text: undefined })).toBeNull();
+  });
+
+  it("returns null for empty text", () => {
+    expect(formatRendersTag({ name: "renders", text: [] })).toBeNull();
+  });
+
+  describe("with definition resolver (clickable links)", () => {
+    const mockTarget: DefinitionTarget = { fileName: "/src/Header.tsx", textSpan: { start: 10, length: 6 } };
+    const resolver: DefinitionResolver = (name) => {
+      if (name === "Header" || name === "Footer" || name === "Menu" || name === "NavItem") {
+        return mockTarget;
+      }
+      return null;
+    };
+
+    it("creates linkcode link parts for resolved component", () => {
+      const result = formatRendersTag(
+        { name: "renders", text: [{ kind: "text", text: "{Header}" }] },
+        resolver,
+      );
+      expect(result).not.toBeNull();
+      expect(result!.text).toContainEqual({ kind: "link", text: "{@linkcode " });
+      expect(result!.text).toContainEqual(expect.objectContaining({ kind: "linkName", text: "Header", target: mockTarget }));
+      expect(result!.text).toContainEqual({ kind: "link", text: "}" });
+    });
+
+    it("creates links for union types", () => {
+      const result = formatRendersTag(
+        { name: "renders", text: [{ kind: "text", text: "{Header | Footer}" }] },
+        resolver,
+      );
+      expect(result!.text).toContainEqual(expect.objectContaining({ kind: "linkName", text: "Header" }));
+      expect(result!.text).toContainEqual({ kind: "text", text: " | " });
+      expect(result!.text).toContainEqual(expect.objectContaining({ kind: "linkName", text: "Footer" }));
+    });
+
+    it("uses full name for namespaced component link", () => {
+      const result = formatRendersTag(
+        { name: "renders", text: [{ kind: "text", text: "{Menu.Item}" }] },
+        resolver,
+      );
+      expect(result!.text).toContainEqual(expect.objectContaining({ kind: "linkName", text: "Menu.Item" }));
+    });
+
+    it("falls back to backticks for unresolved components", () => {
+      const partialResolver: DefinitionResolver = (name) => name === "Header" ? mockTarget : null;
+      const result = formatRendersTag(
+        { name: "renders", text: [{ kind: "text", text: "{Header | Unknown}" }] },
+        partialResolver,
+      );
+      expect(result!.text).toContainEqual(expect.objectContaining({ kind: "linkName", text: "Header" }));
+      expect(result!.text).toContainEqual({ kind: "text", text: "`Unknown`" });
+    });
+
+    it("still appends modifier label with links", () => {
+      const result = formatRendersTag(
+        { name: "renders?", text: [{ kind: "text", text: "{Header}" }] },
+        resolver,
+      );
+      expect(result!.name).toBe("renders?");
+      expect(result!.text).toContainEqual(expect.objectContaining({ kind: "linkName", text: "Header" }));
+      expect(result!.text).toContainEqual({ kind: "text", text: " — *optional*" });
+    });
+  });
+});
+
+describe("formatTransparentTagText", () => {
+  it("formats prop names with backticks", () => {
+    const result = formatTransparentTagText([{ kind: "text", text: "{off, children}" }]);
+    expect(partsToText(result)).toBe("`off`, `children`");
+  });
+
+  it("returns undefined input unchanged", () => {
+    expect(formatTransparentTagText(undefined)).toBeUndefined();
+  });
+
+  it("returns empty array unchanged", () => {
+    const input: SymbolDisplayPart[] = [];
+    expect(formatTransparentTagText(input)).toBe(input);
+  });
+
+  it("returns input unchanged when no braces", () => {
+    const input: SymbolDisplayPart[] = [{ kind: "text", text: "no braces" }];
+    expect(formatTransparentTagText(input)).toBe(input);
+  });
+
+  it("returns input unchanged for empty braces", () => {
+    const input: SymbolDisplayPart[] = [{ kind: "text", text: "{}" }];
+    expect(formatTransparentTagText(input)).toBe(input);
+  });
+});

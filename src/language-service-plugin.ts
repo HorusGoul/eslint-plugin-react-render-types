@@ -159,6 +159,144 @@ function findLocalDeclarationPosition(
   return null;
 }
 
+/** Modifier labels for @renders variants */
+const MODIFIER_LABELS: Record<string, string> = {
+  "?": "optional",
+  "*": "zero or more",
+  "!": "unchecked",
+};
+
+/** Resolves a component name to its definition location for clickable links. */
+type DefinitionResolver = (componentName: string) => { fileName: string; textSpan: ts.TextSpan } | null;
+
+/**
+ * Format a @renders tag for hover display.
+ * Strips braces, wraps component names in backticks for inline code styling,
+ * appends italic modifier labels, and ensures the modifier stays in the tag name.
+ *
+ * When a resolver is provided, component names become clickable {@linkcode} links
+ * that navigate to the component's definition. Falls back to markdown backticks
+ * when no resolver is available or the component can't be resolved.
+ */
+function formatRendersTag(
+  tag: ts.JSDocTagInfo,
+  resolveDefinition?: DefinitionResolver,
+): ts.JSDocTagInfo | null {
+  if (!tag.text || tag.text.length === 0) return null;
+
+  const rawText = tag.text.map((p) => p.text).join("");
+
+  // Extract modifier from tag name (e.g. "renders?" → "?") or text prefix
+  let modifier = "";
+  let name = tag.name;
+  const nameModifierMatch = name.match(/^renders([?*]?!?)$/);
+  if (nameModifierMatch && nameModifierMatch[1]) {
+    modifier = nameModifierMatch[1];
+  } else {
+    const textModifierMatch = rawText.match(/^([?*]!?|!)\s*\{/);
+    if (textModifierMatch && textModifierMatch[1]) {
+      modifier = textModifierMatch[1];
+      // Move modifier into the tag name so it stays visible as @renders?
+      name = `renders${modifier}`;
+    }
+  }
+
+  // Extract type content from braces
+  const contentMatch = rawText.match(/[?*]*!?\s*\{\s*([^}]+)\s*\}/);
+  if (!contentMatch) return null;
+
+  const typeContent = contentMatch[1].trim();
+  const parts: ts.SymbolDisplayPart[] = [];
+
+  const typeNames = typeContent.split("|");
+  typeNames.forEach((typeName, i) => {
+    const trimmed = typeName.trim();
+    if (!trimmed) return;
+    if (i > 0) {
+      parts.push({ kind: "text", text: " | " });
+    }
+
+    const baseName = trimmed.split(".")[0];
+    const target = resolveDefinition?.(baseName);
+    if (target) {
+      // VS Code's convertLinkTags state machine requires link/linkName/link triplet.
+      // Using {@linkcode} wraps the link text in backticks for code styling.
+      parts.push({ kind: "link", text: "{@linkcode " });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (parts as any[]).push({ kind: "linkName", text: trimmed, target });
+      parts.push({ kind: "link", text: "}" });
+    } else {
+      parts.push({ kind: "text", text: `\`${trimmed}\`` });
+    }
+  });
+
+  // Append italic modifier label
+  const label = MODIFIER_LABELS[modifier] ?? MODIFIER_LABELS[modifier[0]];
+  if (label) {
+    parts.push({ kind: "text", text: ` — *${label}*` });
+  }
+
+  return { name, text: parts };
+}
+
+/**
+ * Format the text of a @transparent tag for hover display.
+ * Strips braces and wraps prop names in backticks for inline code styling.
+ *
+ * VS Code renders JSDoc tag text as markdown, so we use backticks
+ * rather than SymbolDisplayPart.kind values (which VS Code strips).
+ */
+function formatTransparentTagText(
+  text: ts.SymbolDisplayPart[] | undefined,
+): ts.SymbolDisplayPart[] | undefined {
+  if (!text || text.length === 0) return text;
+
+  const rawText = text.map((p) => p.text).join("");
+  const match = rawText.match(/\{\s*([^}]*)\s*\}/);
+  if (!match) return text;
+
+  const propContent = match[1].trim();
+  if (!propContent) return text;
+
+  const propNames = propContent.split(",").map((n) => n.trim()).filter(Boolean);
+  const formatted = propNames.map((n) => `\`${n}\``).join(", ");
+
+  return [{ kind: "text", text: formatted }];
+}
+
+/**
+ * Post-process QuickInfo to format @renders and @transparent tags
+ * with structured display parts (matching TypeScript's @type formatting style).
+ */
+function formatQuickInfoTags(
+  info: ts.QuickInfo,
+  resolveDefinition?: DefinitionResolver,
+): ts.QuickInfo {
+  if (!info.tags || info.tags.length === 0) return info;
+
+  let modified = false;
+  const tags = info.tags.map((tag) => {
+    if (tag.name.startsWith("renders")) {
+      const formatted = formatRendersTag(tag, resolveDefinition);
+      if (formatted) {
+        modified = true;
+        return formatted;
+      }
+    }
+    if (tag.name === "transparent") {
+      const formatted = formatTransparentTagText(tag.text);
+      if (formatted !== tag.text) {
+        modified = true;
+        return { ...tag, text: formatted };
+      }
+    }
+    return tag;
+  });
+
+  if (!modified) return info;
+  return { ...info, tags };
+}
+
 function init(modules: { typescript: typeof ts }) {
   const tsModule = modules.typescript;
 
@@ -277,20 +415,64 @@ function init(modules: { typescript: typeof ts }) {
       return info.languageService.getDefinitionAndBoundSpan(fileName, position);
     };
 
+    // Resolve a component name to its definition location by searching for
+    // its import or local declaration in searchFileName, then following it.
+    function resolveComponentDefinition(
+      searchFileName: string,
+      componentName: string,
+    ): { fileName: string; textSpan: ts.TextSpan } | null {
+      const program = info.languageService.getProgram();
+      const sf = program?.getSourceFile(searchFileName);
+      if (!sf) return null;
+
+      const pos =
+        findImportIdentifierPosition(sf, componentName, tsModule) ??
+        findLocalDeclarationPosition(sf, componentName, tsModule);
+      if (pos == null) return null;
+
+      const def = info.languageService.getDefinitionAndBoundSpan(searchFileName, pos);
+      if (!def?.definitions?.length) return null;
+      return { fileName: def.definitions[0].fileName, textSpan: def.definitions[0].textSpan };
+    }
+
     // Hover info: hovering component names inside @renders annotations shows
     // the same type information as hovering the import identifier.
+    // All hover results are post-processed to format @renders/@transparent tags
+    // with clickable links to component definitions.
     proxy.getQuickInfoAtPosition = (fileName: string, position: number) => {
+      // Build a resolver that tries the current file first, then the
+      // declaration file of the hovered symbol (for cross-file @renders tags).
+      const createResolver = (): DefinitionResolver => {
+        let declarationFile: string | null | undefined;
+        return (componentName: string) => {
+          const fromCurrent = resolveComponentDefinition(fileName, componentName);
+          if (fromCurrent) return fromCurrent;
+          if (declarationFile === undefined) {
+            const def = info.languageService.getDefinitionAndBoundSpan(fileName, position);
+            declarationFile = def?.definitions?.[0]?.fileName ?? null;
+          }
+          if (declarationFile && declarationFile !== fileName) {
+            return resolveComponentDefinition(declarationFile, componentName);
+          }
+          return null;
+        };
+      };
+
+      const resolver = createResolver();
+
       const resolved = resolveRendersTarget(fileName, position);
       if (resolved) {
         const result = info.languageService.getQuickInfoAtPosition(fileName, resolved.targetPos);
         if (result) {
-          return {
+          return formatQuickInfoTags({
             ...result,
             textSpan: { start: resolved.hit.start, length: resolved.hit.length },
-          };
+          }, resolver);
         }
       }
-      return info.languageService.getQuickInfoAtPosition(fileName, position);
+      const result = info.languageService.getQuickInfoAtPosition(fileName, position);
+      if (!result) return result;
+      return formatQuickInfoTags(result, resolver);
     };
 
     return proxy;
