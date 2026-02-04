@@ -1,5 +1,11 @@
 # eslint-plugin-react-render-types
 
+## 0.7.2
+
+### Patch Changes
+
+- [`2b29f33`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/2b29f33f93d14a18a222668ca297c82d5b14ede4) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add MIT license file
+
 ## 0.7.1
 
 ### Patch Changes
