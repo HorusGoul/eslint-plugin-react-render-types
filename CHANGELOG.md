@@ -1,5 +1,11 @@
 # eslint-plugin-react-render-types
 
+## 0.7.1
+
+### Patch Changes
+
+- [`bb52bf0`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/bb52bf06fe5cf35a5b71d5be3eb0dce4604f2ce1) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Fix ESLint error messages rendering component names as `{{'NavItem'}}` instead of `NavItem`
+
 ## 0.7.0
 
 ### Minor Changes
