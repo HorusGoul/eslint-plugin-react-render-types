@@ -360,43 +360,54 @@ export default createRule<[], MessageIds>({
         return;
       }
 
+      const resolvedAnnotation = annotation;
+
       // Use pre-resolved type IDs from source context if available (external annotations),
       // otherwise resolve from the current file's scope (local annotations)
-      const resolved = annotation as ResolvedRendersAnnotation;
+      const resolved = resolvedAnnotation as ResolvedRendersAnnotation;
       const expectedTypeId = resolved.targetTypeId
         ?? crossFileResolver.getComponentTypeId(annotation.componentName)
         ?? undefined;
       const expectedTypeIds = resolved.targetTypeIds ?? getExpectedTypeIds(annotation);
 
-      // Validate each child
-      for (const child of node.children) {
-        let extractedNames: string[] = [];
-
-        if (child.type === "JSXElement") {
-          const childName = getJSXElementName(child);
-          if (childName && transparentComponents.has(childName)) {
-            extractedNames = extractChildElementNames(child, transparentComponents);
-          } else if (childName) {
-            extractedNames = [childName];
+      // Validate each child, recursively unwrapping fragments
+      function validateChildren(children: typeof node.children): void {
+        for (const child of children) {
+          if (child.type === "JSXFragment") {
+            validateChildren(child.children);
+            continue;
           }
-        } else if (child.type === "JSXExpressionContainer" && child.expression.type !== "JSXEmptyExpression") {
-          extractedNames = extractJSXFromExpression(child.expression);
-        }
 
-        for (const name of extractedNames) {
-          const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
-          if (!isValidValue(name, annotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
-            context.report({
-              node: child,
-              messageId: "invalidRenderChildren",
-              data: {
-                expected: formatExpected(annotation),
-                actual: name,
-              },
-            });
+          let extractedNames: string[] = [];
+
+          if (child.type === "JSXElement") {
+            const childName = getJSXElementName(child);
+            if (childName && transparentComponents.has(childName)) {
+              extractedNames = extractChildElementNames(child, transparentComponents);
+            } else if (childName) {
+              extractedNames = [childName];
+            }
+          } else if (child.type === "JSXExpressionContainer" && child.expression.type !== "JSXEmptyExpression") {
+            extractedNames = extractJSXFromExpression(child.expression);
+          }
+
+          for (const name of extractedNames) {
+            const actualTypeId = crossFileResolver.getComponentTypeId(name) ?? undefined;
+            if (!isValidValue(name, resolvedAnnotation, renderMap, actualTypeId, expectedTypeId, expectedTypeIds.length > 0 ? expectedTypeIds : undefined)) {
+              context.report({
+                node: child,
+                messageId: "invalidRenderChildren",
+                data: {
+                  expected: formatExpected(resolvedAnnotation),
+                  actual: name,
+                },
+              });
+            }
           }
         }
       }
+
+      validateChildren(node.children);
     }
 
     /**
