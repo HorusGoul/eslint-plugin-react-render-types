@@ -1,6 +1,6 @@
 ---
 name: react-render-types-setup
-description: "Install and configure eslint-plugin-react-render-types in a TypeScript React project. Use when: (1) adding eslint-plugin-react-render-types to a project, (2) configuring ESLint flat config with typed linting for @renders support, (3) troubleshooting typed linting errors or plugin configuration, (4) setting up projectService or tsconfig for the plugin, (5) understanding which rules to enable and what they do, or (6) suppressing unused import warnings in the IDE for @renders-referenced components."
+description: "Install and configure eslint-plugin-react-render-types in a TypeScript React project. Use when: (1) adding eslint-plugin-react-render-types to a project, (2) configuring ESLint flat config with typed linting for @renders support, (3) troubleshooting typed linting errors or plugin configuration, (4) setting up projectService or tsconfig for the plugin, (5) understanding which rules to enable and what they do, or (6) setting up the IDE language service plugin for @renders features (unused import suppression, go-to-definition, hover, completions, find references, rename, diagnostics)."
 ---
 
 # React Render Types — Setup
@@ -168,9 +168,9 @@ settings: {
 
 This matches both direct calls (`observer(...)`) and member expressions (`mobx.observer(...)`).
 
-## IDE Integration: Unused Import Suppression
+## IDE Integration: Language Service Plugin
 
-When a component is imported only for use in a `@renders` annotation, the IDE will grey it out as unused and may auto-remove it on save. The plugin includes a TypeScript Language Service Plugin that suppresses those false positives.
+The plugin includes a TypeScript Language Service Plugin that enhances the IDE experience for `@renders` annotations.
 
 Add to `tsconfig.json`:
 
@@ -185,6 +185,16 @@ Add to `tsconfig.json`:
 ```
 
 Then restart the TypeScript server (VS Code: `Ctrl+Shift+P` → "TypeScript: Restart TS Server").
+
+**Features:**
+
+- **Unused import suppression** — Imports referenced only in `@renders` annotations are kept visible and won't be auto-removed by "organize imports"
+- **Go-to-definition** — `Cmd+Click` on component names inside `@renders` annotations navigates to the component definition
+- **Hover info** — Hovering component names inside `@renders` shows the same type information as hovering the import
+- **Diagnostics** — Warns when a component name in `@renders` doesn't resolve to any import or declaration in the file
+- **Completions** — Autocompletes component names when typing inside `@renders { }` braces
+- **Find references** — "Find All References" on a component includes `@renders` annotation usages across the project
+- **Rename** — Renaming a component updates `@renders` annotations that reference it
 
 **Important**: This is IDE-only — it runs in the editor's TypeScript language service, not during `tsc` CLI builds. For CI, use `@typescript-eslint/no-unused-vars` with the `renders-uses-vars` rule.
 

@@ -363,11 +363,9 @@ function MenuItems({ items }: { items: string[] }) {
 }
 ```
 
-## IDE Integration: Unused Import Suppression
+## IDE Integration: Language Service Plugin
 
-When a component is imported only for use in a `@renders` JSDoc annotation, your IDE will show it as unused — greying out the import, and potentially removing it on save if you have "organize imports" enabled.
-
-This plugin includes a TypeScript Language Service Plugin that suppresses those false positives. Add to your `tsconfig.json`:
+This plugin includes a TypeScript Language Service Plugin that enhances the IDE experience for `@renders` annotations. Add to your `tsconfig.json`:
 
 ```json
 {
@@ -380,6 +378,16 @@ This plugin includes a TypeScript Language Service Plugin that suppresses those 
 ```
 
 Then restart your TypeScript server (in VS Code: `Ctrl+Shift+P` → "TypeScript: Restart TS Server").
+
+**Features:**
+
+- **Unused import suppression** — Imports referenced only in `@renders` annotations are kept visible and won't be auto-removed by "organize imports"
+- **Go-to-definition** — `Cmd+Click` on component names inside `@renders` annotations navigates to the component definition
+- **Hover info** — Hovering component names inside `@renders` shows the same type information as hovering the import
+- **Diagnostics** — Warns when a component name in `@renders` doesn't resolve to any import or declaration in the file
+- **Completions** — Autocompletes component names when typing inside `@renders { }` braces
+- **Find references** — "Find All References" on a component includes `@renders` annotation usages across the project
+- **Rename** — Renaming a component updates `@renders` annotations that reference it
 
 > **Note:** This is IDE-only — it runs in your editor's TypeScript language service, not during `tsc` CLI builds. For CI, use `@typescript-eslint/no-unused-vars` with the `renders-uses-vars` rule.
 
