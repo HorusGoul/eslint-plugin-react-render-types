@@ -12,7 +12,7 @@
  * {
  *   "compilerOptions": {
  *     "plugins": [
- *       { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+ *       { "name": "eslint-plugin-react-render-types/lsp" }
  *     ]
  *   }
  * }
@@ -51,6 +51,7 @@ function init(modules: { typescript: typeof ts }) {
   const tsModule = modules.typescript;
 
   function create(info: ts.server.PluginCreateInfo) {
+
     const proxy = Object.create(null) as ts.LanguageService;
 
     // Delegate all methods to the original language service
@@ -66,6 +67,18 @@ function init(modules: { typescript: typeof ts }) {
       rendersNames: Set<string>,
     ): boolean {
       if (!UNUSED_DIAGNOSTIC_CODES.has(d.code)) return false;
+
+      // When an import has a single specifier and it's unused, TypeScript's
+      // diagnostic spans the entire import declaration, not just the identifier.
+      // Extract the identifier from the message text ("'{name}' is declared...")
+      // which is reliable regardless of span width.
+      const msg = typeof d.messageText === "string" ? d.messageText : d.messageText.messageText;
+      const match = msg.match(/^'([^']+)'/);
+      if (match) {
+        return rendersNames.has(match[1]);
+      }
+
+      // Fallback: try the span text directly (covers cases where span = identifier)
       if (d.start == null || d.length == null) return false;
       const name = sourceFile.text.substring(d.start, d.start + d.length);
       return rendersNames.has(name);
@@ -103,7 +116,9 @@ function init(modules: { typescript: typeof ts }) {
       return prior.map((d) => {
         if (!isRendersReferencedImport(d, sourceFile, rendersNames)) return d;
 
-        const name = sourceFile.text.substring(d.start!, d.start! + d.length!);
+        const msg = typeof d.messageText === "string" ? d.messageText : d.messageText.messageText;
+        const nameMatch = msg.match(/^'([^']+)'/);
+        const name = nameMatch ? nameMatch[1] : sourceFile.text.substring(d.start!, d.start! + d.length!);
         return {
           ...d,
           messageText:

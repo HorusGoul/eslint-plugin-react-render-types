@@ -1,4 +1,9 @@
 {
+  "compilerOptions": {
+    "plugins": [
+      { "name": "eslint-plugin-react-render-types/lsp" }
+    ]
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },

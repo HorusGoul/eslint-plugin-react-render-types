@@ -178,7 +178,7 @@ Add to `tsconfig.json`:
 {
   "compilerOptions": {
     "plugins": [
-      { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+      { "name": "eslint-plugin-react-render-types/lsp" }
     ]
   }
 }

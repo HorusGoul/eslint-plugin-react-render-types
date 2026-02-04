@@ -8,7 +8,7 @@
     "strict": true,
     "noEmit": true,
     "plugins": [
-      { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+      { "name": "eslint-plugin-react-render-types/lsp" }
     ],
     "skipLibCheck": true,
     "esModuleInterop": true,

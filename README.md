@@ -373,7 +373,7 @@ This plugin includes a TypeScript Language Service Plugin that suppresses those 
 {
   "compilerOptions": {
     "plugins": [
-      { "name": "eslint-plugin-react-render-types/language-service-plugin" }
+      { "name": "eslint-plugin-react-render-types/lsp" }
     ]
   }
 }

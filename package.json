@@ -10,14 +10,15 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
-    "./language-service-plugin": {
+    "./lsp": {
       "types": "./dist/language-service-plugin.d.ts",
       "import": "./dist/language-service-plugin.js",
       "require": "./dist/language-service-plugin.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "lsp.js"
   ],
   "scripts": {
     "build": "tsc",

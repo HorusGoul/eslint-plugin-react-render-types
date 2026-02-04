@@ -1,6 +1,19 @@
 import { describe, it, expect } from "vitest";
 
 /**
+ * Replicate the diagnostic name extraction logic from isRendersReferencedImport.
+ * When a single-specifier import is unused, TypeScript's diagnostic spans the
+ * entire import declaration, not just the identifier. We extract the name from
+ * the message text ("'{name}' is declared but...") instead.
+ */
+function extractNameFromDiagnostic(messageText: string | { messageText: string }, spanText: string): string {
+  const msg = typeof messageText === "string" ? messageText : messageText.messageText;
+  const match = msg.match(/^'([^']+)'/);
+  if (match) return match[1];
+  return spanText;
+}
+
+/**
  * Replicate the getRendersComponentNames logic from the TS plugin
  * to test the regex extraction independently.
  * This must stay in sync with src/language-service-plugin.ts.
@@ -108,5 +121,31 @@ describe("getRendersComponentNames", () => {
     expect(getRendersComponentNames(text)).toEqual(
       new Set(["Header", "Footer"])
     );
+  });
+});
+
+describe("extractNameFromDiagnostic", () => {
+  it("extracts name from string message when span is entire import", () => {
+    expect(
+      extractNameFromDiagnostic(
+        "'NavItem' is declared but its value is never read.",
+        'import { NavItem } from "@/design-system/nav/NavItem"',
+      ),
+    ).toBe("NavItem");
+  });
+
+  it("extracts name from DiagnosticMessageChain", () => {
+    expect(
+      extractNameFromDiagnostic(
+        { messageText: "'NavSection' is declared but never used." },
+        'import { NavSection } from "./NavSection"',
+      ),
+    ).toBe("NavSection");
+  });
+
+  it("falls back to span text when message has no quoted name", () => {
+    expect(
+      extractNameFromDiagnostic("some unexpected message", "Header"),
+    ).toBe("Header");
   });
 });
