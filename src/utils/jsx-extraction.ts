@@ -222,25 +222,7 @@ function extractFromTransparentElement(
 
   // Extract from children if "children" is in propNames
   if (propNames.has("children")) {
-    for (const child of jsxElement.children) {
-      if (child.type === "JSXElement") {
-        results.push(
-          ...extractFromJSXElement(
-            child,
-            transparentComponents,
-            new Set(visited),
-            maxDepth - 1
-          )
-        );
-      } else if (
-        child.type === "JSXExpressionContainer" &&
-        child.expression.type !== "JSXEmptyExpression"
-      ) {
-        results.push(
-          ...extractJSXFromExpression(child.expression, maxDepth - 1)
-        );
-      }
-    }
+    extractFromChildren(jsxElement.children, transparentComponents, visited, maxDepth, results);
   }
 
   // Extract from named prop attributes
@@ -304,8 +286,25 @@ export function extractChildElementNames(
 
   const results: string[] = [];
 
-  for (const child of jsxElement.children) {
-    if (child.type === "JSXElement") {
+  extractFromChildren(jsxElement.children, transparentComponents, visited, maxDepth, results);
+
+  return results;
+}
+
+/**
+ * Extract component names from JSX children, recursively unwrapping fragments.
+ */
+function extractFromChildren(
+  children: TSESTree.JSXElement["children"],
+  transparentComponents: Map<string, Set<string>>,
+  visited: Set<string>,
+  maxDepth: number,
+  results: string[]
+): void {
+  for (const child of children) {
+    if (child.type === "JSXFragment") {
+      extractFromChildren(child.children, transparentComponents, visited, maxDepth, results);
+    } else if (child.type === "JSXElement") {
       results.push(
         ...extractFromJSXElement(
           child,
@@ -323,6 +322,4 @@ export function extractChildElementNames(
       );
     }
   }
-
-  return results;
 }

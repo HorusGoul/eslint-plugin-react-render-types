@@ -517,6 +517,37 @@ ruleTester.run("valid-render-prop", rule, {
         },
       },
     },
+    {
+      name: "nested fragments and React.Suspense transparent in children",
+      code: withComponents(
+        `
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        declare const test: boolean;
+
+        <Tabs>
+          <>
+            <Tab id="a" />
+            <>
+              <React.Suspense fallback={null}>
+                {test && <Tab id="b" />}
+              </React.Suspense>
+            </>
+          </>
+        </Tabs>;
+      `,
+        ["Tab", "Tabs"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["React.Suspense"],
+        },
+      },
+    },
 
     // Component with @renders* used as child of union @renders* parent
     {
@@ -1073,6 +1104,48 @@ ruleTester.run("valid-render-prop", rule, {
           data: {
             expected: "AccordionItem",
             actual: "Button",
+          },
+        },
+      ],
+    },
+
+    {
+      name: "nested fragments and React.Suspense transparent with invalid child",
+      code: withComponents(
+        `
+        interface TabsProps {
+          /** @renders {Tab} */
+          children: React.ReactNode;
+        }
+
+        declare const test: boolean;
+
+        <Tabs>
+          <>
+            <Tab id="a" />
+            <>
+              <React.Suspense fallback={null}>
+                {test && <Footer />}
+                <Tab id="b" />
+              </React.Suspense>
+            </>
+          </>
+        </Tabs>;
+      `,
+        ["Tab", "Tabs", "Footer"]
+      ),
+      filename: "test.tsx",
+      settings: {
+        "react-render-types": {
+          additionalTransparentComponents: ["React.Suspense"],
+        },
+      },
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "Tab",
+            actual: "Footer",
           },
         },
       ],
