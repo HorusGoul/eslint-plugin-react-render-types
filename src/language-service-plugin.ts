@@ -20,6 +20,13 @@
 
 import type ts from "typescript/lib/tsserverlibrary";
 
+interface RendersComponentSpan {
+  name: string; // base name before first "." (import lookup key)
+  fullName: string; // as written, e.g. "Menu.Item"
+  start: number; // absolute position in source text
+  length: number; // length of fullName
+}
+
 /** Diagnostic codes for "declared but never read / never used" */
 const UNUSED_DIAGNOSTIC_CODES = new Set([
   6133, // '{0}' is declared but its value is never read.
@@ -45,6 +52,111 @@ function getRendersComponentNames(sourceText: string): Set<string> {
     }
   }
   return names;
+}
+
+/**
+ * Like getRendersComponentNames, but tracks the absolute position of each
+ * component name in the source text so we can map cursor positions back.
+ */
+function getRendersComponentSpans(sourceText: string): RendersComponentSpan[] {
+  const regex = /(?:^|[^a-zA-Z@])@renders(?:\?|\*)?(?:!)?\s*\{\s*([^}]+)\s*\}/g;
+  const spans: RendersComponentSpan[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(sourceText)) !== null) {
+    const typeExpr = match[1];
+    // match[1] starts at this absolute offset in the source
+    const typeExprStart = match.index + match[0].indexOf(typeExpr);
+
+    let offset = 0;
+    for (const part of typeExpr.split("|")) {
+      // offset within typeExpr where this part starts (including the "|")
+      const partStart = typeExpr.indexOf(part, offset);
+      const trimmed = part.trimStart();
+      const leadingSpaces = part.length - trimmed.length;
+      const fullName = trimmed.trimEnd();
+
+      if (fullName && /^[A-Z]/.test(fullName)) {
+        const absoluteStart = typeExprStart + partStart + leadingSpaces;
+        spans.push({
+          name: fullName.split(".")[0],
+          fullName,
+          start: absoluteStart,
+          length: fullName.length,
+        });
+      }
+
+      offset = partStart + part.length;
+    }
+  }
+  return spans;
+}
+
+/**
+ * Find the position of an import identifier matching targetName in the source file.
+ * Checks named imports, default imports, and namespace imports.
+ */
+function findImportIdentifierPosition(
+  sourceFile: ts.SourceFile,
+  targetName: string,
+  tsModule: typeof ts,
+): number | null {
+  for (const stmt of sourceFile.statements) {
+    if (!tsModule.isImportDeclaration(stmt)) continue;
+    const clause = stmt.importClause;
+    if (!clause) continue;
+
+    // Default import: import Menu from "..."
+    if (clause.name && clause.name.text === targetName) {
+      return clause.name.getStart(sourceFile);
+    }
+
+    const bindings = clause.namedBindings;
+    if (!bindings) continue;
+
+    // Namespace import: import * as UI from "..."
+    if (tsModule.isNamespaceImport(bindings)) {
+      if (bindings.name.text === targetName) {
+        return bindings.name.getStart(sourceFile);
+      }
+    }
+
+    // Named imports: import { Header, Footer as F } from "..."
+    if (tsModule.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        if (element.name.text === targetName) {
+          return element.name.getStart(sourceFile);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Find the position of a local declaration (function or variable) matching targetName.
+ * Fallback for components defined in the same file as the @renders annotation.
+ */
+function findLocalDeclarationPosition(
+  sourceFile: ts.SourceFile,
+  targetName: string,
+  tsModule: typeof ts,
+): number | null {
+  for (const stmt of sourceFile.statements) {
+    // function Header() { ... }
+    if (tsModule.isFunctionDeclaration(stmt) && stmt.name?.text === targetName) {
+      return stmt.name.getStart(sourceFile);
+    }
+
+    // const Header = ...
+    if (tsModule.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (tsModule.isIdentifier(decl.name) && decl.name.text === targetName) {
+          return decl.name.getStart(sourceFile);
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function init(modules: { typescript: typeof ts }) {
@@ -127,6 +239,58 @@ function init(modules: { typescript: typeof ts }) {
           category: tsModule.DiagnosticCategory.Error,
         };
       });
+    };
+
+    // Resolve a cursor position to a @renders component span and the
+    // corresponding import/local declaration position.
+    function resolveRendersTarget(fileName: string, position: number) {
+      const program = info.languageService.getProgram();
+      const sourceFile = program?.getSourceFile(fileName);
+      if (!sourceFile) return null;
+
+      const spans = getRendersComponentSpans(sourceFile.text);
+      const hit = spans.find(
+        (s) => position >= s.start && position < s.start + s.length,
+      );
+      if (!hit) return null;
+
+      const importPos = findImportIdentifierPosition(sourceFile, hit.name, tsModule);
+      const targetPos = importPos ?? findLocalDeclarationPosition(sourceFile, hit.name, tsModule);
+      if (targetPos == null) return null;
+
+      return { hit, targetPos };
+    }
+
+    // Go-to-definition: cmd+click on component names inside @renders annotations
+    // navigates to the component's import or local declaration.
+    proxy.getDefinitionAndBoundSpan = (fileName: string, position: number) => {
+      const resolved = resolveRendersTarget(fileName, position);
+      if (resolved) {
+        const result = info.languageService.getDefinitionAndBoundSpan(fileName, resolved.targetPos);
+        if (result) {
+          return {
+            ...result,
+            textSpan: { start: resolved.hit.start, length: resolved.hit.length },
+          };
+        }
+      }
+      return info.languageService.getDefinitionAndBoundSpan(fileName, position);
+    };
+
+    // Hover info: hovering component names inside @renders annotations shows
+    // the same type information as hovering the import identifier.
+    proxy.getQuickInfoAtPosition = (fileName: string, position: number) => {
+      const resolved = resolveRendersTarget(fileName, position);
+      if (resolved) {
+        const result = info.languageService.getQuickInfoAtPosition(fileName, resolved.targetPos);
+        if (result) {
+          return {
+            ...result,
+            textSpan: { start: resolved.hit.start, length: resolved.hit.length },
+          };
+        }
+      }
+      return info.languageService.getQuickInfoAtPosition(fileName, position);
     };
 
     return proxy;

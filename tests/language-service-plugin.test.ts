@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import ts from "typescript";
 
 /**
  * Replicate the diagnostic name extraction logic from isRendersReferencedImport.
@@ -147,5 +148,257 @@ describe("extractNameFromDiagnostic", () => {
     expect(
       extractNameFromDiagnostic("some unexpected message", "Header"),
     ).toBe("Header");
+  });
+});
+
+// ---- Go-to-definition helpers (replicated from src/language-service-plugin.ts) ----
+
+interface RendersComponentSpan {
+  name: string;
+  fullName: string;
+  start: number;
+  length: number;
+}
+
+/**
+ * Replicate getRendersComponentSpans from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function getRendersComponentSpans(sourceText: string): RendersComponentSpan[] {
+  const regex = /(?:^|[^a-zA-Z@])@renders(?:\?|\*)?(?:!)?\s*\{\s*([^}]+)\s*\}/g;
+  const spans: RendersComponentSpan[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(sourceText)) !== null) {
+    const typeExpr = match[1];
+    const typeExprStart = match.index + match[0].indexOf(typeExpr);
+
+    let offset = 0;
+    for (const part of typeExpr.split("|")) {
+      const partStart = typeExpr.indexOf(part, offset);
+      const trimmed = part.trimStart();
+      const leadingSpaces = part.length - trimmed.length;
+      const fullName = trimmed.trimEnd();
+
+      if (fullName && /^[A-Z]/.test(fullName)) {
+        const absoluteStart = typeExprStart + partStart + leadingSpaces;
+        spans.push({
+          name: fullName.split(".")[0],
+          fullName,
+          start: absoluteStart,
+          length: fullName.length,
+        });
+      }
+
+      offset = partStart + part.length;
+    }
+  }
+  return spans;
+}
+
+/**
+ * Replicate findImportIdentifierPosition from the TS plugin for unit testing.
+ * Must stay in sync with src/language-service-plugin.ts.
+ */
+function findImportIdentifierPosition(
+  sourceFile: ts.SourceFile,
+  targetName: string,
+): number | null {
+  for (const stmt of sourceFile.statements) {
+    if (!ts.isImportDeclaration(stmt)) continue;
+    const clause = stmt.importClause;
+    if (!clause) continue;
+
+    if (clause.name && clause.name.text === targetName) {
+      return clause.name.getStart(sourceFile);
+    }
+
+    const bindings = clause.namedBindings;
+    if (!bindings) continue;
+
+    if (ts.isNamespaceImport(bindings)) {
+      if (bindings.name.text === targetName) {
+        return bindings.name.getStart(sourceFile);
+      }
+    }
+
+    if (ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        if (element.name.text === targetName) {
+          return element.name.getStart(sourceFile);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+describe("getRendersComponentSpans", () => {
+  it("extracts single component with correct position", () => {
+    const text = `/** @renders {Header} */`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(1);
+    expect(spans[0].name).toBe("Header");
+    expect(spans[0].fullName).toBe("Header");
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Header");
+  });
+
+  it("extracts union types with correct positions", () => {
+    const text = `/** @renders {Header | Footer} */`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(2);
+    expect(spans[0].name).toBe("Header");
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Header");
+    expect(spans[1].name).toBe("Footer");
+    expect(text.substring(spans[1].start, spans[1].start + spans[1].length)).toBe("Footer");
+  });
+
+  it("extracts namespaced component", () => {
+    const text = `/** @renders {Menu.Item} */`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(1);
+    expect(spans[0].name).toBe("Menu");
+    expect(spans[0].fullName).toBe("Menu.Item");
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Menu.Item");
+  });
+
+  it("handles optional modifier", () => {
+    const text = `/** @renders? {Header} */`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(1);
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Header");
+  });
+
+  it("handles many modifier", () => {
+    const text = `/** @renders* {Header} */`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(1);
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Header");
+  });
+
+  it("handles unchecked modifier", () => {
+    const text = `/** @renders! {Header} */`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(1);
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Header");
+  });
+
+  it("handles whitespace variations", () => {
+    const text = `/**  @renders  {  Header  |  Footer  }  */`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(2);
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Header");
+    expect(text.substring(spans[1].start, spans[1].start + spans[1].length)).toBe("Footer");
+  });
+
+  it("handles multiple annotations in same file", () => {
+    const text = `/** @renders {Header} */
+function A() {}
+/** @renders {Footer} */
+function B() {}`;
+    const spans = getRendersComponentSpans(text);
+    expect(spans).toHaveLength(2);
+    expect(spans[0].name).toBe("Header");
+    expect(text.substring(spans[0].start, spans[0].start + spans[0].length)).toBe("Header");
+    expect(spans[1].name).toBe("Footer");
+    expect(text.substring(spans[1].start, spans[1].start + spans[1].length)).toBe("Footer");
+  });
+
+  it("returns empty array for no annotations", () => {
+    const text = `function MyComponent() { return null; }`;
+    expect(getRendersComponentSpans(text)).toEqual([]);
+  });
+
+  it("ignores lowercase names", () => {
+    const text = `/** @renders {header} */`;
+    expect(getRendersComponentSpans(text)).toEqual([]);
+  });
+
+  describe("hit detection", () => {
+    it("finds span when cursor is at start of name", () => {
+      const text = `/** @renders {Header} */`;
+      const spans = getRendersComponentSpans(text);
+      const pos = text.indexOf("Header");
+      const hit = spans.find((s) => pos >= s.start && pos < s.start + s.length);
+      expect(hit?.name).toBe("Header");
+    });
+
+    it("finds span when cursor is in middle of name", () => {
+      const text = `/** @renders {Header} */`;
+      const spans = getRendersComponentSpans(text);
+      const pos = text.indexOf("Header") + 3;
+      const hit = spans.find((s) => pos >= s.start && pos < s.start + s.length);
+      expect(hit?.name).toBe("Header");
+    });
+
+    it("does not find span when cursor is on brace", () => {
+      const text = `/** @renders {Header} */`;
+      const spans = getRendersComponentSpans(text);
+      const pos = text.indexOf("{");
+      const hit = spans.find((s) => pos >= s.start && pos < s.start + s.length);
+      expect(hit).toBeUndefined();
+    });
+
+    it("does not find span when cursor is on pipe", () => {
+      const text = `/** @renders {Header | Footer} */`;
+      const spans = getRendersComponentSpans(text);
+      const pos = text.indexOf("|");
+      const hit = spans.find((s) => pos >= s.start && pos < s.start + s.length);
+      expect(hit).toBeUndefined();
+    });
+
+    it("finds correct span in union type", () => {
+      const text = `/** @renders {Header | Footer} */`;
+      const spans = getRendersComponentSpans(text);
+      const pos = text.indexOf("Footer");
+      const hit = spans.find((s) => pos >= s.start && pos < s.start + s.length);
+      expect(hit?.name).toBe("Footer");
+    });
+  });
+});
+
+describe("findImportIdentifierPosition", () => {
+  function createSourceFile(code: string): ts.SourceFile {
+    return ts.createSourceFile("test.tsx", code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  }
+
+  it("finds named import", () => {
+    const sf = createSourceFile(`import { Header } from "./Header";`);
+    const pos = findImportIdentifierPosition(sf, "Header");
+    expect(pos).not.toBeNull();
+    expect(sf.text.substring(pos!, pos! + "Header".length)).toBe("Header");
+  });
+
+  it("finds default import", () => {
+    const sf = createSourceFile(`import Menu from "./Menu";`);
+    const pos = findImportIdentifierPosition(sf, "Menu");
+    expect(pos).not.toBeNull();
+    expect(sf.text.substring(pos!, pos! + "Menu".length)).toBe("Menu");
+  });
+
+  it("finds namespace import", () => {
+    const sf = createSourceFile(`import * as UI from "./ui";`);
+    const pos = findImportIdentifierPosition(sf, "UI");
+    expect(pos).not.toBeNull();
+    expect(sf.text.substring(pos!, pos! + "UI".length)).toBe("UI");
+  });
+
+  it("finds aliased import by local name", () => {
+    const sf = createSourceFile(`import { Header as MyHeader } from "./Header";`);
+    const pos = findImportIdentifierPosition(sf, "MyHeader");
+    expect(pos).not.toBeNull();
+    expect(sf.text.substring(pos!, pos! + "MyHeader".length)).toBe("MyHeader");
+  });
+
+  it("returns null when import not found", () => {
+    const sf = createSourceFile(`import { Footer } from "./Footer";`);
+    const pos = findImportIdentifierPosition(sf, "Header");
+    expect(pos).toBeNull();
+  });
+
+  it("finds import among multiple specifiers", () => {
+    const sf = createSourceFile(`import { Header, Footer, Sidebar } from "./components";`);
+    const pos = findImportIdentifierPosition(sf, "Footer");
+    expect(pos).not.toBeNull();
+    expect(sf.text.substring(pos!, pos! + "Footer".length)).toBe("Footer");
   });
 });
