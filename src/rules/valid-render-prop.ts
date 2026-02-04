@@ -26,9 +26,9 @@ export default createRule<[], MessageIds>({
     },
     messages: {
       invalidRenderProp:
-        "Prop '{{propName}}' expects @renders {{'{{expected}}'}} but received {{'{{actual}}'}}",
+        "Prop '{{propName}}' expects @renders `{{expected}}` but received `{{actual}}`",
       invalidRenderChildren:
-        "Children expect @renders {{'{{expected}}'}} but received {{'{{actual}}'}}",
+        "Children expect @renders `{{expected}}` but received `{{actual}}`",
     },
     schema: [],
   },

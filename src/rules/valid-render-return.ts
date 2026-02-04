@@ -26,7 +26,7 @@ export default createRule<[], MessageIds>({
     },
     messages: {
       invalidRenderReturn:
-        "Component annotated with @renders {{'{{expected}}'}} but returns {{'{{actual}}'}}",
+        "Component annotated with @renders `{{expected}}` but returns `{{actual}}`",
     },
     schema: [],
   },
