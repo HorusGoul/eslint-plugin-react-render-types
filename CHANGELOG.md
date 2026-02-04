@@ -1,5 +1,42 @@
 # eslint-plugin-react-render-types
 
+## 0.7.0
+
+### Minor Changes
+
+- [#15](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/15) [`27ee89c`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/27ee89c991f9bbd4017842dc7f507f1ad376a2a6) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Support `@renders` and `@transparent` annotations on `forwardRef` and `memo` wrapped components. The plugin now recognizes patterns like `const Button = forwardRef((props, ref) => ...)` and `const Button = memo(() => ...)`, including nested wrappers like `memo(forwardRef(...))`.
+
+- [`7c33664`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/7c3366449493a9e55f8e0c213a528d89ec197f8a) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Add go-to-definition and hover for component names in `@renders` annotations
+
+  Cmd+click (or F12) on a component name inside `@renders {Header}` now navigates to the component's definition. Hovering shows the same type information as hovering the import. Supports union types, namespaced components (`Menu.Item`), aliased imports, and locally declared components.
+
+- [`014c679`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/014c679c9289f1db2c0f578340c7018c88690bf5) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Improve hover formatting for `@renders` and `@transparent` JSDoc tags
+
+  `@renders` tags in hover popups now display component names as clickable links that navigate to the component's definition. Component names are styled as inline code, union types are separated with `|`, and modifiers show descriptive labels in italics (e.g., `@renders?` → _optional_, `@renders*` → _zero or more_). `@transparent` tag props are also formatted as inline code. Falls back to plain markdown when definitions can't be resolved.
+
+- [`fba83d2`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/fba83d278f5d1387c13034674e67e20fcdd275a5) Thanks [@HorusGoul](https://github.com/HorusGoul)! - feat: add diagnostics, completions, find references, and rename support to the language service plugin
+
+  - Diagnostics: warn when a component name in `@renders` doesn't resolve to any import or local declaration
+  - Completions: autocomplete component names when the cursor is inside `@renders { }` braces
+  - Find references: include `@renders` annotation references when finding all references to a component
+  - Rename: update `@renders` annotations when renaming a component across the project
+
+### Patch Changes
+
+- [`ab61117`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/ab611171ab6fd6e0f834079471a7641920c4d441) Thanks [@HorusGoul](https://github.com/HorusGoul)! - Fix TypeScript Language Service Plugin not loading in IDEs
+
+  TypeScript's tsserver uses Node10-style module resolution (ignoring package.json `exports` maps) when loading plugins. The plugin entry point has been renamed from `/language-service-plugin` to `/lsp` with a CJS proxy file at the package root so tsserver can resolve it.
+
+  Update your `tsconfig.json`:
+
+  ```json
+  {
+    "compilerOptions": {
+      "plugins": [{ "name": "eslint-plugin-react-render-types/lsp" }]
+    }
+  }
+  ```
+
 ## 0.6.0
 
 ### Minor Changes
