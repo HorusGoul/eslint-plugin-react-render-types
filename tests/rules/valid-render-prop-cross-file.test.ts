@@ -114,6 +114,31 @@ ruleTester.run("valid-render-prop (cross-file)", rule, {
       `,
       filename: path.resolve(fixturesDir, "consumer.tsx"),
     },
+    // Component accessed via namespace import (import * as NS from ...)
+    {
+      name: "cross-file: @renders* via namespace import",
+      code: `
+        import * as Components from "./namespace-barrel";
+
+        <Components.Sidebar>
+          <Components.NavLink label="Home" />
+        </Components.Sidebar>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+    },
+    // Component accessed via namespace with union @renders*
+    {
+      name: "cross-file: union @renders* via namespace import",
+      code: `
+        import * as Components from "./namespace-barrel";
+
+        <Components.Nav>
+          <Components.NavItems links={["Home", "About"]} />
+          <Components.NavGroup title="Admin" />
+        </Components.Nav>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+    },
   ],
   invalid: [
     // Unannotated component in cross-file @renders* children
@@ -192,6 +217,49 @@ ruleTester.run("valid-render-prop (cross-file)", rule, {
         <DashboardLayout navigation={<div>bad</div>}>
           <div />
         </DashboardLayout>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "navigation",
+            expected: "NavItem | NavSection",
+            actual: "div",
+          },
+        },
+      ],
+    },
+    // Unannotated component via namespace import in @renders* children
+    {
+      name: "cross-file: unannotated component via namespace import in @renders* children",
+      code: `
+        import * as Components from "./namespace-barrel";
+
+        <Components.Sidebar>
+          <Components.NavSection title="Reports" />
+        </Components.Sidebar>;
+      `,
+      filename: path.resolve(fixturesDir, "consumer.tsx"),
+      errors: [
+        {
+          messageId: "invalidRenderChildren",
+          data: {
+            expected: "NavItem",
+            actual: "Components.NavSection",
+          },
+        },
+      ],
+    },
+    // Wrong element in @renders* named prop via namespace import
+    {
+      name: "cross-file: wrong element in @renders* named prop via namespace import",
+      code: `
+        import * as Components from "./namespace-barrel";
+
+        <Components.DashboardLayout navigation={<div>bad</div>}>
+          <div />
+        </Components.DashboardLayout>;
       `,
       filename: path.resolve(fixturesDir, "consumer.tsx"),
       errors: [

@@ -257,6 +257,31 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
           });
         }
       }
+
+      // Namespace imports: import * as NS from '...'
+      // Enumerate exported members as "NS.Member" entries
+      if (namedBindings && ts.isNamespaceImport(namedBindings)) {
+        const nsName = namedBindings.name.text;
+        const nsSymbol = typeChecker.resolveName(
+          nsName,
+          sourceFile,
+          ts.SymbolFlags.Value | ts.SymbolFlags.Alias,
+          /* excludeGlobals */ false
+        );
+        if (nsSymbol) {
+          const nsType = typeChecker.getTypeOfSymbol(nsSymbol);
+          for (const prop of nsType.getProperties()) {
+            const memberName = prop.getName();
+            // Only include PascalCase names (component-like)
+            if (/^[A-Z]/.test(memberName)) {
+              imports.set(`${nsName}.${memberName}`, {
+                importDeclaration: node,
+                originalName: memberName,
+              });
+            }
+          }
+        }
+      }
     });
 
     return imports;
@@ -603,12 +628,32 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
         // resolveImportSourceFile, because barrel/re-export files don't have the
         // annotation targets as local names in scope.
         let scopeNode: ts.Node = currentSourceFile;
-        const importedSymbol = typeChecker.resolveName(
-          localName,
+
+        // Handle dotted names (e.g., "Components.NavItems" from namespace imports)
+        // by splitting on "." and resolving the base, then traversing members
+        const nameParts = localName.split(".");
+        const baseName = nameParts[0];
+        let importedSymbol = typeChecker.resolveName(
+          baseName,
           currentSourceFile,
           ts.SymbolFlags.Value | ts.SymbolFlags.Alias,
           /* excludeGlobals */ false
         );
+        if (importedSymbol && nameParts.length > 1) {
+          let currentType = typeChecker.getTypeOfSymbol(importedSymbol);
+          for (let i = 1; i < nameParts.length; i++) {
+            const prop = currentType.getProperty(nameParts[i]);
+            if (!prop) {
+              importedSymbol = undefined;
+              break;
+            }
+            if (i === nameParts.length - 1) {
+              importedSymbol = prop;
+            } else {
+              currentType = typeChecker.getTypeOfSymbol(prop);
+            }
+          }
+        }
         if (importedSymbol) {
           const decl = resolveSymbolToDeclaration(importedSymbol);
           if (decl) {
@@ -641,22 +686,38 @@ export function createCrossFileResolver(options: CrossFileResolverOptions) {
    * JSDoc annotations from its property declarations.
    * Target type IDs are resolved from the source file's scope where the
    * annotation is defined, so consumers don't need to import target types.
+   *
+   * Handles dotted names (e.g., "ButtonGroup.Double") by resolving the base
+   * name and traversing member properties — necessary for namespace imports
+   * like `import * as ButtonGroup from './variants'` or
+   * `export * as ButtonGroup from './variants'`.
    */
   function getExternalPropAnnotations(
     componentName: string
   ): Map<string, ResolvedRendersAnnotation> | null {
     if (!currentSourceFile) return null;
 
+    // Split on '.' to handle namespace access (e.g., "ButtonGroup.Double")
+    const parts = componentName.split(".");
+    const baseName = parts[0];
+
     const symbol = typeChecker.resolveName(
-      componentName,
+      baseName,
       currentSourceFile,
       ts.SymbolFlags.Value | ts.SymbolFlags.Alias,
       /* excludeGlobals */ false
     );
     if (!symbol) return null;
 
-    const type = typeChecker.getTypeOfSymbol(symbol);
-    const callSignatures = type.getCallSignatures();
+    // For dotted names, traverse member properties to reach the target component
+    let componentType = typeChecker.getTypeOfSymbol(symbol);
+    for (let i = 1; i < parts.length; i++) {
+      const memberSymbol = componentType.getProperty(parts[i]);
+      if (!memberSymbol) return null;
+      componentType = typeChecker.getTypeOfSymbol(memberSymbol);
+    }
+
+    const callSignatures = componentType.getCallSignatures();
     if (callSignatures.length === 0) return null;
 
     const propsParam = callSignatures[0].getParameters()[0];
