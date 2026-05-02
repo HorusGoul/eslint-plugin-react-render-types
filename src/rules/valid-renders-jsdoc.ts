@@ -154,12 +154,15 @@ export default createRule<[], MessageIds>({
         return true;
       }
 
-      // For namespaced components like Menu.Item, check if the base (Menu) is available
+      // For namespaced components like Menu.Item, check if the full path resolves
+      // via the type checker. Simply checking the base name (Menu) is insufficient
+      // because it wouldn't catch typos like Menu.Itme.
       if (name.includes(".")) {
-        const baseName = name.split(".")[0];
-        if (localComponents.has(baseName) || importedIdentifiers.has(baseName)) {
+        const typeId = crossFileResolver.getComponentTypeId(name);
+        if (typeId) {
           return true;
         }
+        // Fall through to the type-based resolution below as a last resort
       }
 
       // Use type-based resolution to check if the component is resolvable
