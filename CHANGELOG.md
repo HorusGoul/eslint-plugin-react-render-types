@@ -1,5 +1,11 @@
 # eslint-plugin-react-render-types
 
+## 0.7.6
+
+### Patch Changes
+
+- [#25](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/25) [`704b5e5`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/704b5e51992a51b26ca3915383eb0158582e867a) Thanks [@ArthurGoupil](https://github.com/ArthurGoupil)! - Fix namespace import support in @renders validation. Components accessed via `import * as NS from '...'` (e.g., `<NS.Sidebar>`) are now correctly validated by `valid-render-prop` and `valid-renders-jsdoc` rules.
+
 ## 0.7.5
 
 ### Patch Changes
