@@ -474,6 +474,27 @@ ruleTester.run("valid-render-prop", rule, {
       ),
       filename: "test.tsx",
     },
+    // Union @renders* named prop via array accepts annotated and unannotated
+    {
+      name: "union @renders* named prop via array accepts annotated and unannotated",
+      code: withComponents(
+        `
+        /** @renders {NavItem} */
+        function NavLink() {
+          return <NavItem />;
+        }
+
+        interface LayoutProps {
+          /** @renders* {NavItem | NavSection} */
+          navigation: React.ReactNode;
+        }
+
+        <Layout navigation={[<NavLink key="link" />, <NavSection key="section" />]} />;
+      `,
+        ["NavItem", "NavSection", "Layout"]
+      ),
+      filename: "test.tsx",
+    },
     // --- Configured transparent components (settings) ---
     {
       name: "configured transparent wrapper in prop value",
@@ -1036,6 +1057,37 @@ ruleTester.run("valid-render-prop", rule, {
         }
 
         <Layout navigation={<><NavLink /><NavSection /></>} />;
+      `,
+        ["NavItem", "NavSection", "Layout"]
+      ),
+      filename: "test.tsx",
+      errors: [
+        {
+          messageId: "invalidRenderProp",
+          data: {
+            propName: "navigation",
+            expected: "NavItem",
+            actual: "NavSection",
+          },
+        },
+      ],
+    },
+    // Unannotated component in @renders* named prop via array
+    {
+      name: "unannotated component in @renders* named prop via array",
+      code: withComponents(
+        `
+        /** @renders {NavItem} */
+        function NavLink() {
+          return <NavItem />;
+        }
+
+        interface LayoutProps {
+          /** @renders* {NavItem} */
+          navigation: React.ReactNode;
+        }
+
+        <Layout navigation={[<NavLink key="link" />, <NavSection key="section" />]} />;
       `,
         ["NavItem", "NavSection", "Layout"]
       ),
