@@ -9,6 +9,7 @@ import { getJSXElementName } from "./component-utils.js";
  * - Null/undefined literals
  * - Conditional expressions: cond ? <A /> : <B />
  * - Logical expressions: cond && <A />, a || <B />
+ * - Array expressions: [<A />, <B />]
  * - .map()/.flatMap() callbacks: items.map(i => <A />)
  */
 export function extractJSXFromExpression(
@@ -68,6 +69,14 @@ export function extractJSXFromExpression(
         ...extractJSXFromExpression(expr.left, maxDepth - 1),
         ...extractJSXFromExpression(expr.right, maxDepth - 1),
       ];
+
+    case "ArrayExpression": {
+      return expr.elements.flatMap((element) =>
+        element && element.type !== "SpreadElement"
+          ? extractJSXFromExpression(element, maxDepth - 1)
+          : [],
+      );
+    }
 
     case "CallExpression":
       return extractJSXFromCallExpression(expr, maxDepth - 1);
