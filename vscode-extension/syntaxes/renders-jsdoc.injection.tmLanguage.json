@@ -1,0 +1,35 @@
+{
+  "scopeName": "renders.jsdoc.injection",
+  "injectionSelector": "L:comment.block.documentation",
+  "patterns": [
+    { "include": "#renders-with-type" },
+    { "include": "#renders-without-type" },
+    { "include": "#transparent-tag" }
+  ],
+  "repository": {
+    "renders-with-type": {
+      "match": "((@)renders[?*]?!?)\\s*(\\{)([^}]*)(\\})",
+      "captures": {
+        "1": { "name": "storage.type.class.jsdoc" },
+        "2": { "name": "punctuation.definition.block.tag.jsdoc" },
+        "3": { "name": "punctuation.definition.bracket.curly.begin.jsdoc" },
+        "4": { "name": "entity.name.type.instance.jsdoc" },
+        "5": { "name": "punctuation.definition.bracket.curly.end.jsdoc" }
+      }
+    },
+    "renders-without-type": {
+      "match": "((@)renders[?*]?!?)(?=\\s|\\*/|$)",
+      "captures": {
+        "1": { "name": "storage.type.class.jsdoc" },
+        "2": { "name": "punctuation.definition.block.tag.jsdoc" }
+      }
+    },
+    "transparent-tag": {
+      "match": "((@)transparent)(?=\\s|\\*/|$)",
+      "captures": {
+        "1": { "name": "storage.type.class.jsdoc" },
+        "2": { "name": "punctuation.definition.block.tag.jsdoc" }
+      }
+    }
+  }
+}

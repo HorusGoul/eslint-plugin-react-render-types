@@ -1,0 +1,26 @@
+{
+  "name": "renders-jsdoc-syntax",
+  "displayName": "Renders JSDoc Syntax",
+  "description": "Syntax highlighting for @renders and @transparent JSDoc annotations used by eslint-plugin-react-render-types",
+  "version": "0.1.0",
+  "publisher": "horusgoul",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HorusGoul/eslint-plugin-react-render-types.git",
+    "directory": "vscode-extension"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "grammars": [
+      {
+        "scopeName": "renders.jsdoc.injection",
+        "path": "./syntaxes/renders-jsdoc.injection.tmLanguage.json",
+        "injectTo": ["source.ts", "source.tsx", "source.js", "source.jsx"]
+      }
+    ]
+  }
+}
