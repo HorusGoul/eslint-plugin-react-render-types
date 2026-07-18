@@ -1,5 +1,11 @@
 # eslint-plugin-react-render-types
 
+## 0.8.0
+
+### Minor Changes
+
+- [#27](https://github.com/HorusGoul/eslint-plugin-react-render-types/pull/27) [`45655c9`](https://github.com/HorusGoul/eslint-plugin-react-render-types/commit/45655c98e0ed7572c2c01cdd7ad2fb361e2a1102) Thanks [@hgarfinkle](https://github.com/hgarfinkle)! - Support arrays of JSX elements in render prop validation.
+
 ## 0.7.6
 
 ### Patch Changes
